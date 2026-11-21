@@ -84,8 +84,9 @@ fun OnboardingContent(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                // Outside the scroll, so cards clip below the (edge-to-edge) status bar.
                 .statusBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
