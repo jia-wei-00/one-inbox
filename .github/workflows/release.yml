@@ -83,11 +83,13 @@ jobs:
         run: |
           set -euo pipefail
           bt=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)
-          out=$("${bt}apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk)
+          echo "Using ${bt}apksigner"
+          out=$("${bt}apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk 2>&1)
+          # The certificate report holds only public certificate details; print it for debugging.
+          printf '%s\n' "$out"
           # apksigner prints "Signer #1 certificate SHA-256 digest: …" or, in newer build-tools,
           # "Signer (minSdkVersion=…) certificate SHA-256 digest: …". Every signer must be ours.
           digests=$(printf '%s\n' "$out" | grep -E '^Signer.* certificate SHA-256 digest: ' | sed 's/.* certificate SHA-256 digest: //' | tr -d ': \r' | tr 'A-F' 'a-f' | sort -u || true)
-          printf '%s\n' "$out" | grep -E '^Signer.* certificate SHA-256 digest: ' || true
           expected=$(printf '%s' "$RELEASE_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')
           if [ "$digests" != "$expected" ]; then
             echo "::error::APK signer SHA-256 (${digests:-none}) does not match the release certificate ($expected)."
