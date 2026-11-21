@@ -25,7 +25,8 @@ class InboxRepository @Inject constructor(private val dao: InboxDao) {
             )
         }
         val conversations = messages.groupBy { it.conversationKey }.map { (key, group) ->
-            val newest = group.maxBy { it.timestamp }
+            // On equal timestamps the later message in the notification is the newer one.
+            val newest = group.withIndex().maxWith(compareBy({ it.value.timestamp }, { it.index })).value
             ConversationEntity(
                 key = key,
                 packageName = newest.packageName,

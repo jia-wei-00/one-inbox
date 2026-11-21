@@ -71,7 +71,11 @@ private fun RailItem(
             }
         }
         if (badge > 0) {
-            Badge(Modifier.align(Alignment.TopEnd)) { Text(if (badge > 99) "99+" else badge.toString()) }
+            Badge(
+                modifier = Modifier.align(Alignment.TopEnd),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) { Text(if (badge > 99) "99+" else badge.toString(), color = MaterialTheme.colorScheme.onPrimary) }
         }
     }
 }

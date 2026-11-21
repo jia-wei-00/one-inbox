@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.OneInbox" parent="android:Theme.Material.NoActionBar" />
+    <!-- The app draws its own dark theme; stop MIUI/HyperOS force-dark from recoloring it. -->
+    <style name="Theme.OneInbox" parent="android:Theme.Material.NoActionBar">
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
 </resources>

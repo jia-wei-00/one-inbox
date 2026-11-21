@@ -123,4 +123,10 @@ class InboxRepositoryTest {
         assertEquals(5000L, conv.lastMessageAt)
         assertTrue(repo.messages("wa:alice").first().map { it.text } == listOf("older", "newest"))
     }
+
+    @Test
+    fun equalTimestampsPreviewTheLastMessage() = runTest {
+        repo.save(listOf(msg("a", text = "first", ts = 1000), msg("b", text = "second", ts = 1000)))
+        assertEquals("second", repo.conversation("wa:alice").first()!!.preview)
+    }
 }

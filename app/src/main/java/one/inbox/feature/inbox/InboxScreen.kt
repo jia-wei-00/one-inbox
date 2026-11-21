@@ -113,7 +113,12 @@ fun InboxScreen(
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(formatListTime(row.lastMessageAt), style = MaterialTheme.typography.labelSmall)
-                                if (row.unreadCount > 0) Badge { Text(row.unreadCount.toString()) }
+                                if (row.unreadCount > 0) {
+                                    Badge(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    ) { Text(row.unreadCount.toString(), color = MaterialTheme.colorScheme.onPrimary) }
+                                }
                             }
                         }
                         HorizontalDivider()
