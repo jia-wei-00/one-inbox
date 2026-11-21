@@ -1,5 +1,6 @@
 package one.inbox.feature.catchup
 
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -63,10 +64,16 @@ class CatchUpViewModel @Inject constructor(
         return (c.needsReply + c.worthKnowing + c.lowPriority).map { it.conversationKey }.distinct()
             .map { key ->
                 val conv = inbox.conversation(key).first()
-                val pkg = conv?.packageName ?: key.split("|", limit = 3).takeIf { it.size >= 3 }?.get(1)
+                val pkg = conv?.packageName ?: packageOf(key)
                 key to ItemLabel(conv?.title, pkg?.let(appInfo::label))
             }.toMap()
     }
+
+    /** The source app's icon for a summarized conversation, or null if the key is malformed or the app has none. */
+    fun icon(conversationKey: String): ImageBitmap? = packageOf(conversationKey)?.let(appInfo::icon)
+
+    /** The package part of a conversation key (`"$userId|$pkg|$rest"`), or null if the key doesn't split. */
+    private fun packageOf(key: String): String? = key.split("|", limit = 3).takeIf { it.size >= 3 }?.get(1)
 
     /** Runs in the repository's application scope, so closing this screen does not cancel it. */
     fun summarize() = repo.start()

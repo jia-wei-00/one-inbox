@@ -35,6 +35,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -72,9 +73,11 @@ class CatchUpViewModelTest {
     private lateinit var db: AppDatabase
     private lateinit var inbox: InboxRepository
 
+    private val waIcon = ImageBitmap(4, 4)
+
     private val appInfo = object : AppInfoProvider {
         override fun label(pkg: String) = "label:$pkg"
-        override fun icon(pkg: String): ImageBitmap? = null
+        override fun icon(pkg: String): ImageBitmap? = if (pkg == "com.whatsapp") waIcon else null
         override fun isLaunchable(pkg: String) = true
         override fun launchIntent(pkg: String): Intent? = null
     }
@@ -191,5 +194,13 @@ class CatchUpViewModelTest {
         vm.summarize()
         val s = vm.state.first { it.latest != null && !it.running }
         assertEquals(ItemLabel(title = null, appName = "label:com.whatsapp"), s.labels[key])
+    }
+
+    @Test
+    fun iconDerivesThePackageFromTheConversationKey() = runTest {
+        val vm = vm(null, GatedSummarizer(CompletableDeferred(), REPLY_JSON))
+        assertSame(waIcon, vm.icon("0|com.whatsapp|Mom"))
+        assertNull(vm.icon("0|org.telegram.messenger|Bob"))
+        assertNull(vm.icon("malformed-key"))
     }
 }
