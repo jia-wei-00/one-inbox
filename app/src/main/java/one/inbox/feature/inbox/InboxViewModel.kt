@@ -81,7 +81,7 @@ class InboxViewModel @Inject constructor(
     }
 
     fun toggleSidebar() {
-        viewModelScope.launch { settings.setSidebarOpen(!state.value.sidebarOpen) }
+        viewModelScope.launch { settings.toggleSidebar() }
     }
 
     /** Re-run the capture health check (called on resume and every 15 minutes while visible). */

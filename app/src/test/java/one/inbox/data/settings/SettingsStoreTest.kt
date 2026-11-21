@@ -57,6 +57,17 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun toggleSidebarFlipsAtomically() = runTest {
+        val s = store()
+        s.toggleSidebar()
+        assertFalse(s.sidebarOpen.first())
+        s.toggleSidebar()
+        assertTrue(s.sidebarOpen.first())
+        s.toggleSidebar(); s.toggleSidebar()
+        assertTrue(s.sidebarOpen.first())
+    }
+
+    @Test
     fun sidebarDefaultsOpenAndPersists() = runTest {
         val s = store()
         assertTrue(s.sidebarOpen.first())

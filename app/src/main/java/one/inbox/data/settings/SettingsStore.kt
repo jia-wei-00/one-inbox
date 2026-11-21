@@ -43,6 +43,10 @@ class SettingsStore @Inject constructor(private val dataStore: DataStore<Prefere
         dataStore.edit { it[sidebarKey] = open }
     }
 
+    suspend fun toggleSidebar() {
+        dataStore.edit { it[sidebarKey] = !(it[sidebarKey] ?: true) }
+    }
+
     val lastCatchUpJson: Flow<String?> = dataStore.data.map { it[catchUpKey] }
 
     suspend fun setLastCatchUpJson(json: String) {

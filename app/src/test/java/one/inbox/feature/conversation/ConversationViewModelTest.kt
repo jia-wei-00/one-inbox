@@ -69,12 +69,16 @@ class ConversationViewModelTest {
                 m("g", true, "Mom", false, "3", 3), m("g", true, "You", true, "4", 4),
             ),
         )
-        val v = vm("g")
-        val s = v.state.first { it.messages.size == 4 }
+        val s = vm("g").state.first { it.messages.size == 4 }
         assertEquals(2, s.peopleCount)
         assertEquals("com.whatsapp", s.packageName)
         assertTrue(s.canOpenApp)
-        assertEquals("launch:com.whatsapp", v.openAppIntent()?.action)
+    }
+
+    @Test
+    fun openAppIntentWorksWithoutStateCollection() = runTest {
+        repo.save(listOf(m("g", true, "Mom", false, "1", 1)))
+        assertEquals("launch:com.whatsapp", vm("g").openAppIntent()?.action)
     }
 
     @Test

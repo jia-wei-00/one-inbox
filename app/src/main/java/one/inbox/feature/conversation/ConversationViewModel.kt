@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import one.inbox.core.AppInfoProvider
@@ -52,8 +53,8 @@ class ConversationViewModel @Inject constructor(
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ConversationUiState())
 
-    fun openAppIntent(): Intent? =
-        state.value.packageName.takeIf { it.isNotEmpty() }?.let { appInfo.launchIntent(it) }
+    suspend fun openAppIntent(): Intent? =
+        repo.conversation(key).first()?.packageName?.let { appInfo.launchIntent(it) }
 
     init {
         viewModelScope.launch { repo.markConversationRead(key) }
