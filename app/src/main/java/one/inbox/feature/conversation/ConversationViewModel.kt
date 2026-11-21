@@ -1,5 +1,6 @@
 package one.inbox.feature.conversation
 
+import android.content.Intent
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -21,6 +22,9 @@ data class ConversationUiState(
     val title: String = "",
     val isGroup: Boolean = false,
     val messages: List<MessageEntity> = emptyList(),
+    val packageName: String = "",
+    val peopleCount: Int = 0,
+    val canOpenApp: Boolean = false,
 )
 
 @HiltViewModel
@@ -38,8 +42,18 @@ class ConversationViewModel @Inject constructor(
                 title = conv?.title ?: "",
                 isGroup = conv?.isGroup ?: false,
                 messages = msgs,
+                packageName = conv?.packageName ?: "",
+                peopleCount = if (conv?.isGroup == true) {
+                    msgs.filter { !it.isFromMe }.map { it.sender }.distinct().size
+                } else {
+                    0
+                },
+                canOpenApp = conv?.let { appInfo.isLaunchable(it.packageName) } ?: false,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ConversationUiState())
+
+    fun openAppIntent(): Intent? =
+        state.value.packageName.takeIf { it.isNotEmpty() }?.let { appInfo.launchIntent(it) }
 
     init {
         viewModelScope.launch { repo.markConversationRead(key) }

@@ -129,4 +129,18 @@ class InboxRepositoryTest {
         repo.save(listOf(msg("a", text = "first", ts = 1000), msg("b", text = "second", ts = 1000)))
         assertEquals("second", repo.conversation("wa:alice").first()!!.preview)
     }
+
+    @Test
+    fun groupPreviewIsPrefixedWithSender() = runTest {
+        repo.save(listOf(CapturedMessage("wa:fam", "com.whatsapp", "Family", true, "Dad", false, "photos", 1000, "g1")))
+        assertEquals("Dad: photos", repo.conversation("wa:fam").first()!!.preview)
+    }
+
+    @Test
+    fun previewForRules() {
+        assertEquals("Dad: photos", previewFor(true, "Dad", false, "photos"))
+        assertEquals("You: ok", previewFor(true, "You", true, "ok"))
+        assertEquals("hi", previewFor(false, "Jason", false, "hi"))
+        assertEquals("You: see you", previewFor(false, "You", true, "see you"))
+    }
 }

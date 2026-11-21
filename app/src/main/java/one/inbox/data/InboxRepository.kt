@@ -33,7 +33,7 @@ class InboxRepository @Inject constructor(private val dao: InboxDao) {
                 title = newest.conversationTitle,
                 isGroup = newest.isGroup,
                 lastMessageAt = newest.timestamp,
-                preview = newest.text,
+                preview = previewFor(newest.isGroup, newest.sender, newest.isFromMe, newest.text),
             )
         }
         dao.saveAll(entities, conversations)
@@ -53,4 +53,11 @@ class InboxRepository @Inject constructor(private val dao: InboxDao) {
     fun unreadIds(): Flow<List<Long>> = dao.unreadIds()
     suspend fun knownDedupeKeys(keys: Collection<String>): Set<String> =
         if (keys.isEmpty()) emptySet() else dao.knownDedupeKeys(keys).toSet()
+}
+
+/** Conversation-list preview: groups show who spoke, 1:1 shows "You: " only for own messages. */
+internal fun previewFor(isGroup: Boolean, sender: String, isFromMe: Boolean, text: String): String = when {
+    isGroup -> "$sender: $text"
+    isFromMe -> "You: $text"
+    else -> text
 }

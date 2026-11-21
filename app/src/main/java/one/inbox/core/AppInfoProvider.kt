@@ -1,6 +1,7 @@
 package one.inbox.core
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -17,6 +18,7 @@ interface AppInfoProvider {
     fun label(pkg: String): String
     fun icon(pkg: String): ImageBitmap?
     fun isLaunchable(pkg: String): Boolean
+    fun launchIntent(pkg: String): Intent?
 }
 
 class PackageAppInfoProvider @Inject constructor(
@@ -32,8 +34,10 @@ class PackageAppInfoProvider @Inject constructor(
         }
     }
 
-    override fun isLaunchable(pkg: String): Boolean =
-        context.packageManager.getLaunchIntentForPackage(pkg) != null
+    override fun isLaunchable(pkg: String): Boolean = launchIntent(pkg) != null
+
+    override fun launchIntent(pkg: String): Intent? =
+        context.packageManager.getLaunchIntentForPackage(pkg)
 
     override fun icon(pkg: String): ImageBitmap? = try {
         context.packageManager.getApplicationIcon(pkg).toBitmap().asImageBitmap()

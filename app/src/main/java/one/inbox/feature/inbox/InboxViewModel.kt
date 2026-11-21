@@ -21,6 +21,8 @@ import one.inbox.core.AccessChecker
 import one.inbox.core.AppInfoProvider
 import one.inbox.data.InboxRepository
 import one.inbox.data.db.ConversationRow
+import one.inbox.data.settings.SettingsStore
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class RailApp(val packageName: String, val label: String, val unreadCount: Int)
@@ -30,6 +32,9 @@ data class InboxUiState(
     val selected: String? = null,
     val conversations: List<ConversationRow> = emptyList(),
     val health: CaptureHealth = CaptureHealth.Ok,
+    val sidebarOpen: Boolean = true,
+    val totalUnread: Int = 0,
+    val appsWithUnread: Int = 0,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -38,6 +43,7 @@ class InboxViewModel @Inject constructor(
     private val repo: InboxRepository,
     private val appInfo: AppInfoProvider,
     private val access: AccessChecker,
+    private val settings: SettingsStore,
 ) : ViewModel() {
     private val selected = MutableStateFlow<String?>(null)
     private val healthTick = MutableStateFlow(0)
@@ -59,12 +65,23 @@ class InboxViewModel @Inject constructor(
             evaluateHealth(granted, connected, active, known)
         }
 
-    val state: StateFlow<InboxUiState> = combine(rail, selected, conversations, health) { r, s, c, h ->
-        InboxUiState(r, s, c, h)
+    val state: StateFlow<InboxUiState> = combine(
+        combine(rail, selected, conversations, health) { r, s, c, h -> InboxUiState(r, s, c, h) },
+        settings.sidebarOpen,
+    ) { base, open ->
+        base.copy(
+            sidebarOpen = open,
+            totalUnread = base.rail.sumOf { it.unreadCount },
+            appsWithUnread = base.rail.count { it.unreadCount > 0 },
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InboxUiState())
 
     fun select(packageName: String?) {
         selected.value = packageName
+    }
+
+    fun toggleSidebar() {
+        viewModelScope.launch { settings.setSidebarOpen(!state.value.sidebarOpen) }
     }
 
     /** Re-run the capture health check (called on resume and every 15 minutes while visible). */

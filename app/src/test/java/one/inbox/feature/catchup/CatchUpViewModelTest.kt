@@ -1,6 +1,7 @@
 package one.inbox.feature.catchup
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.lifecycle.viewModelScope
@@ -75,6 +76,7 @@ class CatchUpViewModelTest {
         override fun label(pkg: String) = "label:$pkg"
         override fun icon(pkg: String): ImageBitmap? = null
         override fun isLaunchable(pkg: String) = true
+        override fun launchIntent(pkg: String): Intent? = null
     }
 
     @Before

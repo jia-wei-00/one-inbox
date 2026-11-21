@@ -55,4 +55,12 @@ class SettingsStoreTest {
         s.addSeenPackage("com.example.a")
         assertEquals(setOf("com.example.a", "com.example.b"), s.seenPackages.first())
     }
+
+    @Test
+    fun sidebarDefaultsOpenAndPersists() = runTest {
+        val s = store()
+        assertTrue(s.sidebarOpen.first())
+        s.setSidebarOpen(false)
+        assertFalse(s.sidebarOpen.first())
+    }
 }

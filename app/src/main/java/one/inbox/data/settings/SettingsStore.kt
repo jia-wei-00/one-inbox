@@ -17,6 +17,7 @@ class SettingsStore @Inject constructor(private val dataStore: DataStore<Prefere
     private val allowedKey = stringSetPreferencesKey("allowed_packages")
     private val onboardingKey = booleanPreferencesKey("onboarding_done")
     private val seenKey = stringSetPreferencesKey("seen_packages")
+    private val sidebarKey = booleanPreferencesKey("sidebar_open")
     private val catchUpKey = stringPreferencesKey("last_catch_up_json")
 
     private val defaults get() = ChatApps.defaultAllowlist(BuildConfig.DEBUG)
@@ -34,6 +35,12 @@ class SettingsStore @Inject constructor(private val dataStore: DataStore<Prefere
 
     suspend fun setOnboardingDone(done: Boolean) {
         dataStore.edit { it[onboardingKey] = done }
+    }
+
+    val sidebarOpen: Flow<Boolean> = dataStore.data.map { it[sidebarKey] ?: true }
+
+    suspend fun setSidebarOpen(open: Boolean) {
+        dataStore.edit { it[sidebarKey] = open }
     }
 
     val lastCatchUpJson: Flow<String?> = dataStore.data.map { it[catchUpKey] }

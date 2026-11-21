@@ -1,6 +1,7 @@
 package one.inbox.feature.inbox
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.room.Room
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +19,13 @@ import one.inbox.data.db.AppDatabase
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import kotlinx.coroutines.CoroutineScope
+import one.inbox.data.settings.SettingsStore
+import java.io.File
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -31,11 +38,14 @@ class InboxViewModelTest {
     private lateinit var db: AppDatabase
     private lateinit var repo: InboxRepository
     private lateinit var vm: InboxViewModel
+    private lateinit var settings: SettingsStore
+    @get:Rule val tmp = TemporaryFolder()
 
     private val appInfo = object : AppInfoProvider {
         override fun label(pkg: String) = "label:$pkg"
         override fun icon(pkg: String): ImageBitmap? = null
         override fun isLaunchable(pkg: String) = true
+        override fun launchIntent(pkg: String): Intent? = null
     }
     private val access = object : AccessChecker {
         override fun hasNotificationAccess() = true
@@ -48,7 +58,10 @@ class InboxViewModelTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries().build()
         repo = InboxRepository(db.inboxDao())
-        vm = InboxViewModel(repo, appInfo, access)
+        settings = SettingsStore(
+            PreferenceDataStoreFactory.create(scope = CoroutineScope(UnconfinedTestDispatcher())) { File(tmp.root, "t.preferences_pb") },
+        )
+        vm = InboxViewModel(repo, appInfo, access, settings)
     }
 
     @After
@@ -87,5 +100,19 @@ class InboxViewModelTest {
         assertEquals("Alice", filtered.conversations.single().title)
         vm.select(null)
         assertEquals(2, vm.state.first { it.selected == null && it.conversations.size == 2 }.conversations.size)
+    }
+
+    @Test
+    fun totalsAndSidebarToggle() = runTest {
+        seed()
+        repo.save(listOf(CapturedMessage("sg:c", "org.signal", "C", false, "Me", true, "x", 4000, "d")))
+        val state = vm.state.first { it.rail.size == 3 }
+        assertEquals(3, state.rail.size)
+        assertEquals(3, state.totalUnread)
+        assertEquals(2, state.appsWithUnread)
+        assertEquals(true, state.sidebarOpen)
+        vm.toggleSidebar()
+        vm.state.first { !it.sidebarOpen }
+        assertEquals(false, settings.sidebarOpen.first())
     }
 }

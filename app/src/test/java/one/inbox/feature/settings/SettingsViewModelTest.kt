@@ -1,5 +1,6 @@
 package one.inbox.feature.settings
 
+import android.content.Intent
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +37,7 @@ class SettingsViewModelTest {
         override fun label(pkg: String) = "label:$pkg"
         override fun icon(pkg: String): ImageBitmap? = null
         override fun isLaunchable(pkg: String) = pkg == "com.example.chat"
+        override fun launchIntent(pkg: String): Intent? = null
     }
     private var failing = false
     private val keys = object : ApiKeyStore {
