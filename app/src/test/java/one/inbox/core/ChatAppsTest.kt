@@ -15,6 +15,7 @@ class ChatAppsTest {
         assertEquals("WhatsApp", ChatApps.displayName("com.whatsapp"))
         assertEquals("X", ChatApps.displayName("com.twitter.android"))
         assertNull(ChatApps.displayName("com.example.unknown"))
+        assertEquals("ADB test", ChatApps.displayName(ChatApps.DEBUG_TEST_PACKAGE))
     }
 
     @Test fun debugAllowlistAddsShellForAdbTests() {
