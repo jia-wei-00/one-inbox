@@ -10,6 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.serialization.Serializable
+import one.inbox.feature.catchup.CatchUpScreen
 import one.inbox.feature.conversation.ConversationScreen
 import one.inbox.feature.inbox.InboxScreen
 
@@ -32,7 +33,13 @@ fun OneInboxNavGraph(onboardingDone: Boolean) {
             )
         }
         composable<ConversationRoute> { ConversationScreen(onBack = { nav.popBackStack() }) }
-        composable<CatchUpRoute> { ComingSoon() }
+        composable<CatchUpRoute> {
+            CatchUpScreen(
+                onBack = { nav.popBackStack() },
+                onOpenConversation = { nav.navigate(ConversationRoute(it)) },
+                onOpenSettings = { nav.navigate(SettingsRoute) },
+            )
+        }
         composable<OnboardingRoute> { ComingSoon() }
         composable<SettingsRoute> { ComingSoon() }
     }
