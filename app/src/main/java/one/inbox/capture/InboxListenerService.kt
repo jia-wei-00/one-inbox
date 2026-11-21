@@ -65,6 +65,7 @@ class InboxListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
         events.trySend {
+            settings.addSeenPackage(sbn.packageName)
             val allowed = settings.allowedPackages.first()
             if (BuildConfig.DEBUG) {
                 Log.d(TAG, "posted ${sbn.packageName} extras=${sbn.notification.extras?.keySet()}")

@@ -16,6 +16,7 @@ import javax.inject.Inject
 class SettingsStore @Inject constructor(private val dataStore: DataStore<Preferences>) {
     private val allowedKey = stringSetPreferencesKey("allowed_packages")
     private val onboardingKey = booleanPreferencesKey("onboarding_done")
+    private val seenKey = stringSetPreferencesKey("seen_packages")
     private val catchUpKey = stringPreferencesKey("last_catch_up_json")
 
     private val defaults get() = ChatApps.defaultAllowlist(BuildConfig.DEBUG)
@@ -39,5 +40,14 @@ class SettingsStore @Inject constructor(private val dataStore: DataStore<Prefere
 
     suspend fun setLastCatchUpJson(json: String) {
         dataStore.edit { it[catchUpKey] = json }
+    }
+
+    val seenPackages: Flow<Set<String>> = dataStore.data.map { it[seenKey] ?: emptySet() }
+
+    suspend fun addSeenPackage(packageName: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[seenKey] ?: emptySet()
+            if (packageName !in current) prefs[seenKey] = current + packageName
+        }
     }
 }

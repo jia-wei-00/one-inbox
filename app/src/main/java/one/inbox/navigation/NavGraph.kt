@@ -1,11 +1,6 @@
 package one.inbox.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -13,6 +8,8 @@ import kotlinx.serialization.Serializable
 import one.inbox.feature.catchup.CatchUpScreen
 import one.inbox.feature.conversation.ConversationScreen
 import one.inbox.feature.inbox.InboxScreen
+import one.inbox.feature.onboarding.OnboardingScreen
+import one.inbox.feature.settings.SettingsScreen
 
 @Serializable object InboxRoute
 @Serializable object CatchUpRoute
@@ -40,12 +37,18 @@ fun OneInboxNavGraph(onboardingDone: Boolean) {
                 onOpenSettings = { nav.navigate(SettingsRoute) },
             )
         }
-        composable<OnboardingRoute> { ComingSoon() }
-        composable<SettingsRoute> { ComingSoon() }
+        composable<OnboardingRoute> {
+            OnboardingScreen(
+                onDone = {
+                    nav.navigate(InboxRoute) { popUpTo<OnboardingRoute> { inclusive = true } }
+                },
+            )
+        }
+        composable<SettingsRoute> {
+            SettingsScreen(
+                onBack = { nav.popBackStack() },
+                onRunSetupAgain = { nav.navigate(OnboardingRoute) },
+            )
+        }
     }
-}
-
-@Composable
-private fun ComingSoon() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Coming soon") }
 }

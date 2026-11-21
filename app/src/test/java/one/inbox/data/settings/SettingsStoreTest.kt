@@ -45,4 +45,14 @@ class SettingsStoreTest {
         s.setOnboardingDone(true)
         assertTrue(s.onboardingDone.first())
     }
+
+    @Test
+    fun seenPackagesAccumulate() = runTest {
+        val s = store()
+        assertEquals(emptySet<String>(), s.seenPackages.first())
+        s.addSeenPackage("com.example.a")
+        s.addSeenPackage("com.example.b")
+        s.addSeenPackage("com.example.a")
+        assertEquals(setOf("com.example.a", "com.example.b"), s.seenPackages.first())
+    }
 }
