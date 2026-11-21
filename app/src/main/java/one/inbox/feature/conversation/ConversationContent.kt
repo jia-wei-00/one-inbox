@@ -51,6 +51,8 @@ import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -63,10 +65,10 @@ import androidx.compose.ui.unit.sp
 import one.inbox.data.db.MessageEntity
 import one.inbox.ui.components.Avatar
 import one.inbox.ui.components.senderColorIndex
-import one.inbox.ui.theme.AvatarPairs
 import one.inbox.ui.theme.ExpressiveMotion
 import one.inbox.ui.theme.OneInboxTheme
-import one.inbox.ui.theme.SenderColors
+import one.inbox.ui.theme.senderColor
+import java.time.LocalDate
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -104,8 +106,9 @@ fun ConversationContent(
     onBack: () -> Unit,
     onOpenApp: () -> Unit,
     motionEnabled: Boolean = true,
+    today: LocalDate = LocalDate.now(),
 ) {
-    val items = remember(state.messages, state.isGroup) { buildChatItems(state.messages, state.isGroup) }
+    val items = remember(state.messages, state.isGroup, today) { buildChatItems(state.messages, state.isGroup, today) }
     // Newest first, drawn bottom-up: the list starts at the newest message with no initial jump.
     val newestFirst = remember(items) { items.asReversed() }
     val listState = rememberLazyListState()
@@ -240,7 +243,7 @@ private fun DayChipRow(label: String, modifier: Modifier = Modifier) {
         ) {
             Text(
                 label,
-                Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                Modifier.padding(horizontal = 12.dp, vertical = 4.dp).semantics { heading() },
                 style = MaterialTheme.typography.labelMedium,
             )
         }
@@ -283,10 +286,7 @@ private fun BubbleRow(item: ChatBubble, modifier: Modifier = Modifier) {
 
 /** Pastel sender colors on the dark scheme; their deeper avatar-pair partners on the light one. */
 @Composable
-private fun senderNameColor(sender: String): Color {
-    val i = senderColorIndex(sender)
-    return if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) SenderColors[i] else AvatarPairs[i].second
-}
+private fun senderNameColor(sender: String): Color = MaterialTheme.colorScheme.senderColor(senderColorIndex(sender))
 
 /**
  * The message text with its time at the bottom-right: on the last line when it fits beside it,

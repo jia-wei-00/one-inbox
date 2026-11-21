@@ -10,6 +10,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -111,7 +113,18 @@ class InboxScreenshotTest {
     }
 
     @Test
-    fun inbox_empty() = capture("inbox_empty", InboxUiState())
+    fun inbox_empty() = capture("inbox_empty", InboxUiState(loaded = true))
+
+    /** Cold start: nothing is known yet, so no fake empty inbox, no subtitle, no rail. */
+    @Test
+    fun inbox_loading() = capture("inbox_loading", InboxUiState())
+
+    @Test
+    fun noEmptyStateBeforeLoad() {
+        compose.setContent { OneInboxTheme(darkTheme = true) { Content(InboxUiState()) } }
+        compose.onNodeWithText("No messages yet").assertDoesNotExist()
+        compose.onNodeWithText("All caught up").assertDoesNotExist()
+    }
 
     @Test
     fun inbox_fontScale130() = capture("inbox_fontScale130", baseState(), fontScale = 1.3f)
@@ -138,6 +151,12 @@ class InboxScreenshotTest {
         state.value = state.value.copy(sidebarOpen = false)
         compose.onNodeWithContentDescription("Show apps").assertExists()
         compose.onNodeWithText("All apps").assertExists()
+    }
+
+    @Test
+    fun inboxTitleIsAHeading() {
+        compose.setContent { OneInboxTheme(darkTheme = true) { Content(baseState()) } }
+        compose.onNode(hasText("Inbox") and isHeading()).assertExists()
     }
 
     @Test
@@ -248,6 +267,7 @@ class InboxScreenshotTest {
             sidebarOpen = true,
             totalUnread = rail.sumOf { it.unreadCount },
             appsWithUnread = rail.count { it.unreadCount > 0 },
+            loaded = true,
         )
     }
 

@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -39,12 +38,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import one.inbox.ui.theme.DoneGreen
+import one.inbox.ui.theme.doneGreen
 import one.inbox.ui.theme.OneInboxTheme
+import one.inbox.ui.components.OneInboxTonalButton
 
 enum class OnboardingStep { Access, Battery, Autostart, Recents }
 
@@ -136,7 +137,12 @@ fun OnboardingContent(
 private fun Hero() {
     val colors = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 8.dp)) {
-        Text("Set up One Inbox", style = MaterialTheme.typography.headlineLarge, color = colors.onBackground)
+        Text(
+            "Set up One Inbox",
+            Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineLarge,
+            color = colors.onBackground,
+        )
         Spacer(Modifier.height(4.dp))
         Text(
             "4 quick steps so no message slips through",
@@ -176,7 +182,7 @@ private fun StepCard(
                             "Done ✓",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = DoneGreen,
+                            color = colors.doneGreen,
                         )
                     } else {
                         Text(hint, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
@@ -214,7 +220,7 @@ private fun StepCard(
                     }
                     Spacer(Modifier.weight(1f))
                     if (onOpen != null) {
-                        FilledTonalButton(
+                        OneInboxTonalButton(
                             onClick = onOpen,
                             modifier = Modifier.semantics { contentDescription = "Open $title" },
                         ) {
@@ -235,12 +241,12 @@ private fun StepCircle(number: Int, done: Boolean) {
         Modifier
             .size(StepCircleSize)
             .clip(CircleShape)
-            .background(if (done) DoneGreen.copy(alpha = 0.18f) else colors.primaryContainer)
+            .background(if (done) colors.doneGreen.copy(alpha = 0.18f) else colors.primaryContainer)
             .clearAndSetSemantics {},
         contentAlignment = Alignment.Center,
     ) {
         if (done) {
-            Icon(Icons.Rounded.Check, contentDescription = null, tint = DoneGreen, modifier = Modifier.size(22.dp))
+            Icon(Icons.Rounded.Check, contentDescription = null, tint = colors.doneGreen, modifier = Modifier.size(22.dp))
         } else {
             Text(
                 number.toString(),

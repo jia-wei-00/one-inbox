@@ -40,15 +40,23 @@ fun initialsOf(title: String): String {
 
 // Proportions from the mockup at the 46dp reference size.
 private val ReferenceSize = 46.dp
-private val BadgeSize = 18.dp
-private val BadgeCorner = 6.dp
 private val BadgeRing = 2.dp
 private val BadgeOverhang = 3.dp
 
+/** The badge icon is at most this share of the avatar, so the initial stays readable. */
+private const val BADGE_FRACTION = 0.30f
+
+/** Corner radius as a share of the badge icon (6dp on the mockup's 18dp badge). */
+private const val BADGE_CORNER_FRACTION = 1f / 3f
+
+/** With a badge, the initial moves up-left by this share of the avatar, away from the badge. */
+private const val INITIAL_SHIFT_FRACTION = 0.06f
+
 /**
  * A circular avatar with initials in one of the six pastel pairs. When [appIcon] is set, the
- * source app's icon sits at the bottom-right as a rounded badge ringed in the surface color.
- * The badge overhangs the avatar's bounds slightly (as in the mockup); it is not clipped.
+ * source app's icon sits at the bottom-right as a rounded badge (30% of the avatar) ringed in the
+ * surface color, and the initial shifts up-left to stay clear of it. The badge overhangs the
+ * avatar's bounds slightly (as in the mockup); it is not clipped.
  */
 @Composable
 fun Avatar(
@@ -66,8 +74,10 @@ fun Avatar(
             Modifier.matchParentSize().clip(CircleShape).background(container),
             contentAlignment = Alignment.Center,
         ) {
+            val shift = if (appIcon != null) -(size * INITIAL_SHIFT_FRACTION) else 0.dp
             Text(
                 initialsOf(title),
+                Modifier.offset(x = shift, y = shift),
                 color = content,
                 fontSize = fontSize,
                 fontWeight = FontWeight.Bold,
@@ -76,13 +86,15 @@ fun Avatar(
         }
         if (appIcon != null) {
             val ring = BadgeRing * scale
+            val badge = size * BADGE_FRACTION
+            val corner = badge * BADGE_CORNER_FRACTION
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
                     .offset(x = BadgeOverhang * scale, y = BadgeOverhang * scale)
                     .testTag("avatar-badge")
-                    .size(BadgeSize * scale + ring * 2)
-                    .clip(RoundedCornerShape(BadgeCorner * scale + ring))
+                    .size(badge + ring * 2)
+                    .clip(RoundedCornerShape(corner + ring))
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(ring),
             ) {
@@ -90,7 +102,7 @@ fun Avatar(
                     appIcon,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize().clip(RoundedCornerShape(BadgeCorner * scale)),
+                    modifier = Modifier.matchParentSize().clip(RoundedCornerShape(corner)),
                 )
             }
         }

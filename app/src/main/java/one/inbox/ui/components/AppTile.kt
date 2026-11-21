@@ -2,7 +2,7 @@ package one.inbox.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -46,7 +46,8 @@ private val BadgeRing = 2.dp
  * A rounded-square app tile: the app icon, or [glyph] (when null, the label's first letter) on
  * `surfaceContainerHighest`.
  *
- * The layout bounds are the tile itself (at least 48dp for touch). The selection outline (2dp
+ * The layout bounds are the tile itself (at least 48dp for touch; exactly [size] when [onClick] is
+ * null, for a tile that only illustrates a row which is itself the target). The selection outline (2dp
  * outside the tile), the selection bar (10dp left of the tile) and the unread badge (top-right)
  * are drawn outside those bounds, so the parent needs ~10dp of free space on the left and ~6dp
  * above/below — the 68dp-wide rail with a 48dp tile centered gives exactly that.
@@ -57,7 +58,7 @@ fun AppTile(
     icon: ImageBitmap?,
     selected: Boolean,
     unread: Int,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
     glyph: String? = null,
@@ -71,7 +72,7 @@ fun AppTile(
 
     Box(
         modifier
-            .minimumInteractiveComponentSize()
+            .then(if (onClick != null) Modifier.minimumInteractiveComponentSize() else Modifier)
             .size(size)
             .drawBehind {
                 if (!selected) return@drawBehind
@@ -98,7 +99,14 @@ fun AppTile(
                 .matchParentSize()
                 .clip(tileShape)
                 .background(colors.surfaceContainerHighest)
-                .clickable(role = Role.Button, onClick = onClick)
+                .then(
+                    if (onClick != null) {
+                        // A filter tab: TalkBack announces it as a tab and whether it's the selected one.
+                        Modifier.selectable(selected = selected, role = Role.Tab, onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                )
                 .semantics { contentDescription = description },
             contentAlignment = Alignment.Center,
         ) {

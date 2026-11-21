@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -57,6 +59,12 @@ class ConversationScreenshotTest {
         state.value = directState()
         compose.onNodeWithText("Messenger").assertExists()
         compose.onNodeWithText("people", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun dayChipsAreHeadings() {
+        compose.setContent { OneInboxTheme(darkTheme = true) { content(groupState()) } }
+        compose.onNode(hasText("Today") and isHeading()).assertExists()
     }
 
     @Test
@@ -117,7 +125,14 @@ class ConversationScreenshotTest {
         icon: ImageBitmap? = null,
         onBack: () -> Unit = {},
         onOpenApp: () -> Unit = {},
-    ) = ConversationContent(state = state, appIcon = icon, onBack = onBack, onOpenApp = onOpenApp, motionEnabled = false)
+    ) = ConversationContent(
+        state = state,
+        appIcon = icon,
+        onBack = onBack,
+        onOpenApp = onOpenApp,
+        motionEnabled = false,
+        today = TODAY,
+    )
 
     private var nextId = 1L
 
@@ -135,8 +150,8 @@ class ConversationScreenshotTest {
         )
 
     private fun groupState(): ConversationUiState {
-        val yesterday = LocalDate.now().minusDays(1)
-        val today = LocalDate.now()
+        val yesterday = TODAY.minusDays(1)
+        val today = TODAY
         val messages = listOf(
             msg("Dad", "Landed safely ✈️ The hotel is lovely, will send photos tomorrow", at(yesterday, 21, 2)),
             msg("Lily", "陈明说明天见 😊", at(yesterday, 21, 10)),
@@ -163,7 +178,7 @@ class ConversationScreenshotTest {
     }
 
     private fun directState(): ConversationUiState {
-        val today = LocalDate.now()
+        val today = TODAY
         val key = "ms:alex"
         val messages = listOf(
             msg("Alex Tan", "Hey! Free for a call this week?", at(today.minusDays(3), 18, 20), key = key),
@@ -192,7 +207,7 @@ class ConversationScreenshotTest {
     }
 
     private fun longState(count: Int): ConversationUiState {
-        val start = at(LocalDate.now(), 8, 0)
+        val start = at(TODAY, 8, 0)
         val messages = (1..count).map { i ->
             MessageEntity(i.toLong(), "d$i", "wa:long", WHATSAPP, "Sam", i % 3 == 0, "Message $i", start + i * 600_000L, false)
         }
@@ -221,5 +236,8 @@ class ConversationScreenshotTest {
 
     private companion object {
         const val WHATSAPP = "com.whatsapp"
+
+        /** Pinned, so the day chips ("Today", "Yesterday", "Nov 19") never drift with the clock. */
+        val TODAY: LocalDate = LocalDate.of(2026, 11, 22)
     }
 }

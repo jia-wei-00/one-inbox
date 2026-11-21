@@ -2,6 +2,7 @@ package one.inbox.screenshots
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
@@ -9,6 +10,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasStateDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -18,6 +22,8 @@ import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import one.inbox.feature.catchup.CatchUpContent
 import one.inbox.feature.catchup.CatchUpUiState
+import one.inbox.feature.catchup.INTRO_BODY
+import one.inbox.feature.catchup.INTRO_TITLE
 import one.inbox.feature.catchup.ItemLabel
 import one.inbox.feature.catchup.MSG_NO_API_KEY
 import one.inbox.summary.CatchUp
@@ -109,6 +115,29 @@ class CatchUpScreenshotTest {
     }
 
     @Test
+    fun introExplainsCatchUpOnlyBeforeTheFirstSummary() {
+        val state = mutableStateOf(CatchUpUiState())
+        compose.setContent { content(state.value) }
+        compose.onNodeWithText(INTRO_TITLE).assertExists()
+        compose.onNodeWithText(INTRO_BODY).assertExists()
+        state.value = fullState()
+        compose.onNodeWithText(INTRO_TITLE).assertDoesNotExist()
+    }
+
+    @Test
+    fun lowPriorityHeaderAnnouncesItsState() {
+        compose.setContent { content(fullState()) }
+        compose.onNode(hasStateDescription("Collapsed")).assertExists().performClick()
+        compose.onNode(hasStateDescription("Expanded")).assertExists()
+    }
+
+    @Test
+    fun heroTitleIsAHeading() {
+        compose.setContent { content(fullState()) }
+        compose.onNode(hasText("Catch-up ✨") and isHeading()).assertExists()
+    }
+
+    @Test
     fun runningDisablesSummarize() {
         compose.setContent { content(fullState().copy(running = true)) }
         compose.onNodeWithText("Summarizing…").assertIsNotEnabled()
@@ -193,7 +222,7 @@ class CatchUpScreenshotTest {
         )
     }
 
-    private fun iconFor(conversationKey: String): ImageBitmap? = when (conversationKey.split("|")[1]) {
+    private fun iconFor(packageName: String): ImageBitmap? = when (packageName) {
         WHATSAPP -> waIcon
         TELEGRAM -> tgIcon
         else -> null

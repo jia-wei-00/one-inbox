@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -49,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -65,6 +67,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -113,14 +116,8 @@ fun InboxContent(
     onFixHealth: () -> Unit,
     motionEnabled: Boolean = true,
 ) {
-    // App icons are decoded from the PackageManager; keep them for the life of the screen.
-    val iconOf: (String) -> ImageBitmap? = remember(icon) {
-        val cache = HashMap<String, ImageBitmap?>()
-        val cached: (String) -> ImageBitmap? = { pkg ->
-            if (pkg in cache) cache[pkg] else icon(pkg).also { cache[pkg] = it }
-        }
-        cached
-    }
+    // App icons are cached app-wide, per package and at display size, by AppInfoProvider.
+    val iconOf = icon
 
     val listState = rememberLazyListState()
     var collapsedByScroll by remember { mutableStateOf(false) }
@@ -155,34 +152,53 @@ fun InboxContent(
             )
         },
         floatingActionButton = {
-            CatchUpFab(state.totalUnread, fabExpanded, onCatchUp, Modifier.navigationBarsPadding())
+            CatchUpFab(if (state.loaded) state.totalUnread else 0, fabExpanded, onCatchUp, Modifier.navigationBarsPadding())
         },
     ) { padding ->
         Row(Modifier.padding(padding).padding(top = 12.dp).fillMaxSize()) {
-            AnimatedVisibility(
-                visible = state.sidebarOpen,
-                enter = expandHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled), Alignment.Start) +
-                    slideInHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled)) { -it } +
-                    fadeIn(ExpressiveMotion.defaultEffectsSpec(motionEnabled)),
-                exit = shrinkHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled), Alignment.Start) +
-                    slideOutHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled)) { -it } +
-                    fadeOut(ExpressiveMotion.fastEffectsSpec(motionEnabled)),
-            ) {
-                AppRail(state.rail, state.selected, state.totalUnread, iconOf, onSelect)
-            }
-            val topEnd by animateDpAsState(
-                if (state.sidebarOpen) 0.dp else SheetCorner,
-                ExpressiveMotion.defaultEffectsSpec(motionEnabled),
-                label = "sheetCorner",
-            )
-            Surface(
-                Modifier.weight(1f).fillMaxHeight().nestedScroll(fabScroll),
-                shape = RoundedCornerShape(topStart = SheetCorner, topEnd = topEnd.coerceAtLeast(0.dp)),
-                color = MaterialTheme.colorScheme.surface,
-            ) {
-                InboxList(state, listState, iconOf, onOpenConversation, onFixHealth)
+            // Recreated once when the first real state arrives, so the rail and sheet corner start at
+            // the stored value instead of animating away from the default; later toggles animate.
+            key(state.loaded) {
+                RailAndSheet(state, listState, iconOf, fabScroll, onSelect, onOpenConversation, onFixHealth, motionEnabled)
             }
         }
+    }
+}
+
+@Composable
+private fun RowScope.RailAndSheet(
+    state: InboxUiState,
+    listState: LazyListState,
+    iconOf: (String) -> ImageBitmap?,
+    fabScroll: NestedScrollConnection,
+    onSelect: (String?) -> Unit,
+    onOpenConversation: (String) -> Unit,
+    onFixHealth: () -> Unit,
+    motionEnabled: Boolean,
+) {
+    val railOpen = state.loaded && state.sidebarOpen
+    AnimatedVisibility(
+        visible = railOpen,
+        enter = expandHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled), Alignment.Start) +
+            slideInHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled)) { -it } +
+            fadeIn(ExpressiveMotion.defaultEffectsSpec(motionEnabled)),
+        exit = shrinkHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled), Alignment.Start) +
+            slideOutHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled)) { -it } +
+            fadeOut(ExpressiveMotion.fastEffectsSpec(motionEnabled)),
+    ) {
+        AppRail(state.rail, state.selected, state.totalUnread, iconOf, onSelect)
+    }
+    val topEnd by animateDpAsState(
+        if (railOpen) 0.dp else SheetCorner,
+        ExpressiveMotion.defaultEffectsSpec(motionEnabled),
+        label = "sheetCorner",
+    )
+    Surface(
+        Modifier.weight(1f).fillMaxHeight().nestedScroll(fabScroll),
+        shape = RoundedCornerShape(topStart = SheetCorner, topEnd = topEnd.coerceAtLeast(0.dp)),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        InboxList(state, listState, iconOf, onOpenConversation, onFixHealth)
     }
 }
 
@@ -214,19 +230,23 @@ private fun InboxTopBar(
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Inbox",
+                    Modifier.semantics { heading() },
                     style = MaterialTheme.typography.headlineLarge,
                     color = colors.onBackground,
                     maxLines = 1,
                 )
-                AnimatedVisibility(
-                    visible = !state.sidebarOpen,
-                    modifier = Modifier.weight(1f, fill = false),
-                    enter = fadeIn(ExpressiveMotion.defaultEffectsSpec(motionEnabled)) +
-                        expandHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled), Alignment.Start),
-                    exit = fadeOut(ExpressiveMotion.fastEffectsSpec(motionEnabled)) +
-                        shrinkHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled), Alignment.Start),
-                ) {
-                    FilterChip(chipLabel, chipIcon, onToggleSidebar, Modifier.padding(start = 12.dp))
+                // As with the rail: no animation on the switch from the default state to the loaded one.
+                key(state.loaded) {
+                    AnimatedVisibility(
+                        visible = state.loaded && !state.sidebarOpen,
+                        modifier = Modifier.weight(1f, fill = false),
+                        enter = fadeIn(ExpressiveMotion.defaultEffectsSpec(motionEnabled)) +
+                            expandHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled), Alignment.Start),
+                        exit = fadeOut(ExpressiveMotion.fastEffectsSpec(motionEnabled)) +
+                            shrinkHorizontally(ExpressiveMotion.defaultSpatialSpec(motionEnabled), Alignment.Start),
+                    ) {
+                        FilterChip(chipLabel, chipIcon, onToggleSidebar, Modifier.padding(start = 12.dp))
+                    }
                 }
             }
             IconButton(onClick = onSettings) {
@@ -234,7 +254,8 @@ private fun InboxTopBar(
             }
         }
         Text(
-            inboxSubtitle(state.totalUnread, state.appsWithUnread),
+            // Before the first real state an empty line holds the height, so nothing jumps.
+            if (state.loaded) inboxSubtitle(state.totalUnread, state.appsWithUnread) else "",
             // Lines up with the "Inbox" title: 48dp menu button + 12dp gap.
             Modifier.padding(start = 60.dp, end = 12.dp),
             style = MaterialTheme.typography.bodyMedium,
@@ -307,6 +328,8 @@ private fun InboxList(
     onOpenConversation: (String) -> Unit,
     onFixHealth: () -> Unit,
 ) {
+    // Nothing is known yet: an empty sheet rather than a fake "No messages yet".
+    if (!state.loaded) return
     val showHealth = healthText(state.health) != null
     if (state.conversations.isEmpty()) {
         Column(Modifier.fillMaxSize()) {
@@ -410,6 +433,7 @@ private fun InboxContentPreview() {
                 health = CaptureHealth.Ok,
                 totalUnread = 7,
                 appsWithUnread = 3,
+                loaded = true,
             ),
             icon = { null },
             label = { pkg -> rail.first { it.packageName == pkg }.label },

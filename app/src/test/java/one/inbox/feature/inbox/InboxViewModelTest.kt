@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.room.Room
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -18,6 +19,8 @@ import one.inbox.data.InboxRepository
 import one.inbox.data.db.AppDatabase
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -114,5 +117,12 @@ class InboxViewModelTest {
         vm.toggleSidebar()
         vm.state.first { !it.sidebarOpen }
         assertEquals(false, settings.sidebarOpen.first())
+    }
+
+    @Test
+    fun startsNotLoadedAndTheFirstRealEmissionIsLoaded() = runTest {
+        assertFalse(vm.state.value.loaded)
+        val firstReal = vm.state.drop(1).first()
+        assertTrue(firstReal.loaded)
     }
 }

@@ -10,7 +10,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import one.inbox.core.AppInfoProvider
@@ -38,8 +40,14 @@ class ConversationViewModel @Inject constructor(
 ) : ViewModel() {
     private val key = savedState.toRoute<ConversationRoute>().key
 
+    // A PackageManager lookup, so done once per package rather than on every new message.
+    private val canOpenApp = repo.conversation(key)
+        .map { it?.packageName }
+        .distinctUntilChanged()
+        .map { pkg -> pkg != null && appInfo.isLaunchable(pkg) }
+
     val state: StateFlow<ConversationUiState> =
-        combine(repo.conversation(key), repo.messages(key)) { conv, msgs ->
+        combine(repo.conversation(key), repo.messages(key), canOpenApp) { conv, msgs, launchable ->
             ConversationUiState(
                 appName = conv?.let { appInfo.label(it.packageName) } ?: "",
                 title = conv?.title ?: "",
@@ -51,7 +59,7 @@ class ConversationViewModel @Inject constructor(
                 } else {
                     0
                 },
-                canOpenApp = conv?.let { appInfo.isLaunchable(it.packageName) } ?: false,
+                canOpenApp = conv != null && launchable,
                 conversationKey = key,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ConversationUiState())

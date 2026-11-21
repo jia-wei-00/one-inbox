@@ -33,6 +33,9 @@ data class CatchUpUiState(
     val labels: Map<String, ItemLabel> = emptyMap(),
 )
 
+/** The package part of a conversation key (`"$userId|$pkg|$rest"`), or null if the key doesn't split. */
+fun packageOf(key: String): String? = key.split("|", limit = 3).takeIf { it.size >= 3 }?.get(1)
+
 @HiltViewModel
 class CatchUpViewModel @Inject constructor(
     private val repo: CatchUpRepository,
@@ -69,11 +72,8 @@ class CatchUpViewModel @Inject constructor(
             }.toMap()
     }
 
-    /** The source app's icon for a summarized conversation, or null if the key is malformed or the app has none. */
-    fun icon(conversationKey: String): ImageBitmap? = packageOf(conversationKey)?.let(appInfo::icon)
-
-    /** The package part of a conversation key (`"$userId|$pkg|$rest"`), or null if the key doesn't split. */
-    private fun packageOf(key: String): String? = key.split("|", limit = 3).takeIf { it.size >= 3 }?.get(1)
+    /** The app's icon (cached app-wide by package), or null when the app has none. */
+    fun icon(packageName: String): ImageBitmap? = appInfo.icon(packageName)
 
     /** Runs in the repository's application scope, so closing this screen does not cancel it. */
     fun summarize() = repo.start()

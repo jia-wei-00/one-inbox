@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,7 +28,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +48,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,7 +57,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import one.inbox.ui.components.AppTile
 import one.inbox.ui.components.SectionCard
-import one.inbox.ui.theme.DoneGreen
+import one.inbox.ui.theme.doneGreen
 import one.inbox.ui.theme.OneInboxTheme
 
 /**
@@ -70,14 +74,8 @@ fun SettingsContent(
     onSetAllowed: (String, Boolean) -> Unit,
     onRunSetup: () -> Unit,
 ) {
-    // App icons are decoded from the PackageManager; keep them for the life of the screen.
-    val iconOf: (String) -> ImageBitmap? = remember(icon) {
-        val cache = HashMap<String, ImageBitmap?>()
-        val cached: (String) -> ImageBitmap? = { pkg ->
-            if (pkg in cache) cache[pkg] else icon(pkg).also { cache[pkg] = it }
-        }
-        cached
-    }
+    // App icons are cached app-wide, per package and at display size, by AppInfoProvider.
+    val iconOf = icon
     val colors = MaterialTheme.colorScheme
 
     Scaffold(
@@ -86,7 +84,8 @@ fun SettingsContent(
         topBar = { SettingsTopBar(onBack) },
     ) { padding ->
         LazyColumn(
-            Modifier.padding(padding).fillMaxSize(),
+            // imePadding: the key field stays above the keyboard (the activity is edge-to-edge).
+            Modifier.padding(padding).fillMaxSize().imePadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -111,6 +110,7 @@ private fun SettingsTopBar(onBack: () -> Unit) {
         Spacer(Modifier.width(4.dp))
         Text(
             "Settings",
+            Modifier.semantics { heading() },
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = colors.onBackground,
@@ -150,10 +150,12 @@ private fun ApiKeyCard(
                 onClick = { onSaveKey(draft) { draft = "" } },
                 modifier = Modifier.heightIn(min = 48.dp),
             ) { Text("Save", fontWeight = FontWeight.Bold) }
-            FilledTonalButton(
+            // Destructive and secondary: error-colored text, never the most prominent action.
+            TextButton(
                 enabled = state.hasKey,
                 onClick = onClearKey,
                 modifier = Modifier.heightIn(min = 48.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = colors.error),
             ) { Text("Clear", fontWeight = FontWeight.Bold) }
         }
         val status = state.keyMessage ?: if (state.hasKey) MSG_KEY_SAVED else null
@@ -164,7 +166,7 @@ private fun ApiKeyCard(
                 Icon(
                     if (ok) Icons.Rounded.CheckCircle else Icons.Rounded.ErrorOutline,
                     contentDescription = null,
-                    tint = if (ok) DoneGreen else colors.error,
+                    tint = if (ok) colors.doneGreen else colors.error,
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
@@ -220,7 +222,8 @@ private fun AppRow(app: AppToggle, icon: ImageBitmap?, onSetAllowed: (String, Bo
             icon = icon,
             selected = false,
             unread = 0,
-            onClick = { toggle(!app.allowed) },
+            // Not a target of its own (the row is), so no 48dp touch box: it lines up with the card title.
+            onClick = null,
             // The row speaks for the app; the tile's own "N unread" description doesn't apply here.
             modifier = Modifier.clearAndSetSemantics {},
             size = 40.dp,

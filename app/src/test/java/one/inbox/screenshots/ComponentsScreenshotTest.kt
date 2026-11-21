@@ -21,6 +21,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
@@ -126,6 +135,31 @@ class ComponentsScreenshotTest {
             OneInboxTheme(darkTheme = true) { Avatar("Alex Tan", "k", appIcon = icon) }
         }
         compose.onNodeWithTag("avatar-badge").assertExists()
+    }
+
+    @Test
+    fun appTileIsASelectableTab() {
+        compose.setContent {
+            OneInboxTheme(darkTheme = true) {
+                Row {
+                    AppTile("WhatsApp", icon = null, selected = true, unread = 0, onClick = {})
+                    AppTile("Telegram", icon = null, selected = false, unread = 2, onClick = {})
+                }
+            }
+        }
+        val tab = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
+        compose.onNodeWithContentDescription("WhatsApp, 0 unread").assertIsSelected().assert(tab)
+        compose.onNodeWithContentDescription("Telegram, 2 unread").assertIsNotSelected().assert(tab)
+    }
+
+    @Test
+    fun appTileWithoutClickIsExactlyItsSize() {
+        compose.setContent {
+            OneInboxTheme(darkTheme = true) {
+                AppTile("Signal", icon = null, selected = false, unread = 0, onClick = null, size = 40.dp)
+            }
+        }
+        compose.onRoot().assertWidthIsEqualTo(40.dp).assertHeightIsEqualTo(40.dp)
     }
 
     @Composable

@@ -197,10 +197,16 @@ class CatchUpViewModelTest {
     }
 
     @Test
-    fun iconDerivesThePackageFromTheConversationKey() = runTest {
+    fun iconsAreLookedUpByPackage() = runTest {
         val vm = vm(null, GatedSummarizer(CompletableDeferred(), REPLY_JSON))
-        assertSame(waIcon, vm.icon("0|com.whatsapp|Mom"))
-        assertNull(vm.icon("0|org.telegram.messenger|Bob"))
-        assertNull(vm.icon("malformed-key"))
+        assertSame(waIcon, vm.icon("com.whatsapp"))
+        assertNull(vm.icon("org.telegram.messenger"))
+    }
+
+    @Test
+    fun packageOfSplitsTheConversationKey() {
+        assertEquals("com.whatsapp", packageOf("0|com.whatsapp|Mom"))
+        assertEquals("org.telegram.messenger", packageOf("0|org.telegram.messenger|Bob|with|bars"))
+        assertNull(packageOf("malformed-key"))
     }
 }

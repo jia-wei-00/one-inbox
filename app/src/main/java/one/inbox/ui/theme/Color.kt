@@ -4,6 +4,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 /**
  * Palette A, "Violet night". The dark scheme uses the spec's token table verbatim; the roles the
@@ -98,7 +99,10 @@ val AvatarPairs: List<Pair<Color, Color>> = listOf(
     Color(0xFFC9F1EF) to Color(0xFF0F4D49),
 )
 
-/** Group sender name colors, in spec order. Chosen with [one.inbox.ui.components.senderColorIndex]. */
+/**
+ * Group sender name colors for the dark scheme, in spec order. Chosen with
+ * [one.inbox.ui.components.senderColorIndex]; use [senderColor] to get the one for the current scheme.
+ */
 val SenderColors: List<Color> = listOf(
     Color(0xFFFFB1C8),
     Color(0xFF9FE0A8),
@@ -108,5 +112,17 @@ val SenderColors: List<Color> = listOf(
     Color(0xFF8EE6DE),
 )
 
-/** The "Done ✓" green used for completed setup steps. */
-val DoneGreen: Color = Color(0xFF9FE0A8)
+/** The "Done ✓" green on the dark scheme. */
+val DoneGreenDark: Color = Color(0xFF9FE0A8)
+
+/** The "Done ✓" green on the light scheme: deep enough for 4.5:1 on light surfaces. */
+val DoneGreenLight: Color = Color(0xFF1E6B2E)
+
+/** Whether this is the dark scheme (Palette A's dark surfaces), judged from the surface color. */
+val ColorScheme.isDark: Boolean get() = surface.luminance() < 0.5f
+
+/** The "Done ✓" green for this scheme. */
+val ColorScheme.doneGreen: Color get() = if (isDark) DoneGreenDark else DoneGreenLight
+
+/** Sender name color [index]: the pastel on the dark scheme, the deeper avatar-pair partner on the light one. */
+fun ColorScheme.senderColor(index: Int): Color = if (isDark) SenderColors[index] else AvatarPairs[index].second

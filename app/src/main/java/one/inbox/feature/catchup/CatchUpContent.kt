@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Celebration
 import androidx.compose.material.icons.rounded.ErrorOutline
@@ -40,7 +41,6 @@ import androidx.compose.material.icons.rounded.MarkChatUnread
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -64,6 +64,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -77,6 +81,7 @@ import one.inbox.summary.CatchUp
 import one.inbox.summary.CatchUpItem
 import one.inbox.summary.StoredCatchUp
 import one.inbox.ui.components.Avatar
+import one.inbox.ui.components.OneInboxTonalButton
 import one.inbox.ui.components.SectionCard
 import one.inbox.ui.theme.ExpressiveMotion
 import one.inbox.ui.theme.OneInboxTheme
@@ -131,7 +136,7 @@ fun lowPriorityTitle(count: Int): String = "🔕 Low priority · $count"
 @Composable
 fun CatchUpContent(
     state: CatchUpUiState,
-    icon: (conversationKey: String) -> ImageBitmap?,
+    icon: (packageName: String) -> ImageBitmap?,
     onBack: () -> Unit,
     onSummarize: () -> Unit,
     onMarkAllRead: () -> Unit,
@@ -140,14 +145,8 @@ fun CatchUpContent(
     motionEnabled: Boolean = true,
     now: Long = System.currentTimeMillis(),
 ) {
-    // App icons are decoded from the PackageManager; keep them for the life of the screen.
-    val iconOf: (String) -> ImageBitmap? = remember(icon) {
-        val cache = HashMap<String, ImageBitmap?>()
-        val cached: (String) -> ImageBitmap? = { key ->
-            if (key in cache) cache[key] else icon(key).also { cache[key] = it }
-        }
-        cached
-    }
+    // Icons are cached app-wide by package (AppInfoProvider); summarized rows name a conversation.
+    val iconOf: (String) -> ImageBitmap? = remember(icon) { { key -> packageOf(key)?.let(icon) } }
     var lowExpanded by rememberSaveable { mutableStateOf(false) }
     val latest = state.latest
     val colors = MaterialTheme.colorScheme
@@ -173,6 +172,7 @@ fun CatchUpContent(
                     ))
                 }
             }
+            if (latest == null) item(key = "intro") { IntroCard() }
             val c = latest?.catchUp ?: return@LazyColumn
             if (c.needsReply.isNotEmpty()) {
                 item(key = "needs") {
@@ -218,7 +218,12 @@ private fun BackBar(onBack: () -> Unit) {
 private fun Hero(latest: StoredCatchUp?, newSince: Int, now: Long) {
     val colors = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 6.dp)) {
-        Text("Catch-up ✨", style = MaterialTheme.typography.headlineLarge, color = colors.onBackground)
+        Text(
+            "Catch-up ✨",
+            Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineLarge,
+            color = colors.onBackground,
+        )
         Spacer(Modifier.height(4.dp))
         Text(
             catchUpSubtitle(latest, now),
@@ -255,6 +260,41 @@ private fun Hero(latest: StoredCatchUp?, newSince: Int, now: Long) {
         }
     }
 }
+
+/** Before the first summary: what catch-up does, and that nothing is sent until Summarize. */
+@Composable
+private fun IntroCard() {
+    val colors = MaterialTheme.colorScheme
+    SectionCard(
+        containerColor = colors.surfaceContainerHigh,
+        contentColor = colors.onSurface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(colors.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = colors.onPrimaryContainer,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(INTRO_TITLE, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text(INTRO_BODY, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+const val INTRO_TITLE = "How catch-up works"
+const val INTRO_BODY = "Claude reads your unread chats and sorts them into Needs your reply, Worth knowing and " +
+    "Low priority. Nothing is sent until you tap Summarize."
 
 @Composable
 private fun MessageCard(message: String, onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
@@ -344,7 +384,8 @@ private fun LowPriorityCard(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onToggle)
+                    .clickable(role = Role.Button, onClick = onToggle)
+                    .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
                     .heightIn(min = 56.dp)
                     .padding(start = 16.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -434,14 +475,10 @@ private fun ActionBar(hasLatest: Boolean, running: Boolean, onSummarize: () -> U
             val half = (maxWidth - ActionGap) / 2 - ButtonHorizontalPadding * 2
             val stacked = hasLatest && with(density) { widest.toDp() } > half
             val markAllRead = @Composable { modifier: Modifier ->
-                FilledTonalButton(
+                OneInboxTonalButton(
                     onClick = onMarkAllRead,
                     modifier = modifier.heightIn(min = 52.dp),
                     contentPadding = ButtonPadding,
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = colors.surfaceContainerHighest,
-                        contentColor = colors.onSurface,
-                    ),
                 ) {
                     ButtonLabel("Mark all read")
                 }

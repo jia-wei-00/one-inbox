@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
@@ -59,6 +61,26 @@ class SetupScreensScreenshotTest {
 
     @Test
     fun onboarding_partial() = captureOnboarding("onboarding_partial", FRESH.copy(access = true, batteryOk = true))
+
+    /** Light scheme: the "Done ✓" green and the tonal "Open" use their light counterparts. */
+    @Test
+    fun onboarding_partialLight() = captureOnboarding(
+        "onboarding_partialLight",
+        FRESH.copy(access = true, batteryOk = true),
+        dark = false,
+    )
+
+    @Test
+    fun onboardingHeroIsAHeading() {
+        compose.setContent { onboarding(FRESH) }
+        compose.onNode(hasText("Set up One Inbox") and isHeading()).assertExists()
+    }
+
+    @Test
+    fun settingsTitleIsAHeading() {
+        compose.setContent { settings(SettingsUiState(apps = SIX_APPS)) }
+        compose.onNode(hasText("Settings") and isHeading()).assertExists()
+    }
 
     @Test
     fun doneIsEnabledOnlyWithAccess() {
@@ -201,8 +223,8 @@ class SetupScreensScreenshotTest {
 
     // --- Helpers ------------------------------------------------------------------------------
 
-    private fun captureOnboarding(name: String, steps: OnboardingSteps) {
-        compose.setContent { onboarding(steps) }
+    private fun captureOnboarding(name: String, steps: OnboardingSteps, dark: Boolean = true) {
+        compose.setContent { onboarding(steps, dark = dark) }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
     }
@@ -219,7 +241,8 @@ class SetupScreensScreenshotTest {
         onOpen: (OnboardingStep) -> Unit = {},
         onToggle: (OnboardingStep, Boolean) -> Unit = { _, _ -> },
         onDone: () -> Unit = {},
-    ) = OneInboxTheme(darkTheme = true) {
+        dark: Boolean = true,
+    ) = OneInboxTheme(darkTheme = dark) {
         OnboardingContent(steps = steps, onOpen = onOpen, onToggle = onToggle, onDone = onDone)
     }
 

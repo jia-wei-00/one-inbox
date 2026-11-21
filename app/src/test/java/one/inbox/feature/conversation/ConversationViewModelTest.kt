@@ -8,6 +8,7 @@ import androidx.room.Room
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -35,11 +36,15 @@ class ConversationViewModelTest {
     private lateinit var db: AppDatabase
     private lateinit var repo: InboxRepository
     private val waIcon = ImageBitmap(4, 4)
+    private val launchableChecks = mutableListOf<String>()
 
     private val appInfo = object : AppInfoProvider {
         override fun label(pkg: String) = "label:$pkg"
         override fun icon(pkg: String): ImageBitmap? = if (pkg == "com.whatsapp") waIcon else null
-        override fun isLaunchable(pkg: String) = true
+        override fun isLaunchable(pkg: String): Boolean {
+            launchableChecks += pkg
+            return true
+        }
         override fun launchIntent(pkg: String): Intent? = Intent("launch:$pkg")
     }
 
@@ -97,5 +102,20 @@ class ConversationViewModelTest {
         assertEquals("g", vm.state.first { it.messages.size == 1 }.conversationKey)
         assertSame(waIcon, vm.icon("com.whatsapp"))
         assertNull(vm.icon("com.other"))
+    }
+
+    @Test
+    fun launchabilityIsCheckedOncePerPackageNotOnEveryMessage() = runTest {
+        repo.save(listOf(m("g", true, "Mom", false, "1", 1)))
+        val vm = vm("g")
+        // One continuous subscriber, as the screen has.
+        backgroundScope.launch { vm.state.collect {} }
+        vm.state.first { it.messages.size == 1 }
+        repo.save(listOf(m("g", true, "Dad", false, "2", 2)))
+        vm.state.first { it.messages.size == 2 }
+        repo.save(listOf(m("g", true, "Mom", false, "3", 3)))
+        val s = vm.state.first { it.messages.size == 3 }
+        assertTrue(s.canOpenApp)
+        assertEquals(listOf("com.whatsapp"), launchableChecks)
     }
 }

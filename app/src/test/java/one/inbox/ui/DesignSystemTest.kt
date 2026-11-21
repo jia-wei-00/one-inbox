@@ -3,13 +3,20 @@ package one.inbox.ui
 import androidx.compose.animation.core.SnapSpec
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import one.inbox.ui.components.avatarPairIndex
 import one.inbox.ui.components.initialsOf
 import one.inbox.ui.components.senderColorIndex
 import one.inbox.ui.theme.AvatarPairs
+import one.inbox.ui.theme.DoneGreenDark
+import one.inbox.ui.theme.DoneGreenLight
 import one.inbox.ui.theme.ExpressiveMotion
 import one.inbox.ui.theme.SenderColors
 import one.inbox.ui.theme.VioletNightDark
+import one.inbox.ui.theme.VioletNightLight
+import one.inbox.ui.theme.doneGreen
+import one.inbox.ui.theme.isDark
+import one.inbox.ui.theme.senderColor
 import one.inbox.ui.theme.motionEnabled
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -82,5 +89,30 @@ class DesignSystemTest {
         assertEquals(Color(0xFFFFB4AB), VioletNightDark.error)
         assertEquals(Color(0xFF93000A), VioletNightDark.errorContainer)
         assertEquals(Color(0xFFFFDAD6), VioletNightDark.onErrorContainer)
+    }
+
+    private fun contrast(a: Color, b: Color): Float {
+        val la = a.luminance() + 0.05f
+        val lb = b.luminance() + 0.05f
+        return maxOf(la, lb) / minOf(la, lb)
+    }
+
+    @Test
+    fun doneGreenAndSenderColorsFollowTheScheme() {
+        assertTrue(VioletNightDark.isDark)
+        assertFalse(VioletNightLight.isDark)
+        assertEquals(DoneGreenDark, VioletNightDark.doneGreen)
+        assertEquals(DoneGreenLight, VioletNightLight.doneGreen)
+        for (scheme in listOf(VioletNightDark, VioletNightLight)) {
+            val green = scheme.doneGreen
+            assertTrue("done green on ${scheme.surfaceContainerHigh}", contrast(green, scheme.surfaceContainerHigh) >= 4.5f)
+            // Sender names sit on incoming bubbles (surfaceContainerHigh).
+            repeat(SenderColors.size) { i ->
+                val c = scheme.senderColor(i)
+                assertTrue("sender $i: ${contrast(c, scheme.surfaceContainerHigh)}", contrast(c, scheme.surfaceContainerHigh) >= 4.5f)
+            }
+        }
+        assertEquals(SenderColors[0], VioletNightDark.senderColor(0))
+        assertEquals(AvatarPairs[0].second, VioletNightLight.senderColor(0))
     }
 }

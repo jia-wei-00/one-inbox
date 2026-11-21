@@ -35,6 +35,8 @@ data class InboxUiState(
     val sidebarOpen: Boolean = true,
     val totalUnread: Int = 0,
     val appsWithUnread: Int = 0,
+    /** False until the repository and settings have emitted once; until then nothing real is known. */
+    val loaded: Boolean = false,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -73,6 +75,7 @@ class InboxViewModel @Inject constructor(
             sidebarOpen = open,
             totalUnread = base.rail.sumOf { it.unreadCount },
             appsWithUnread = base.rail.count { it.unreadCount > 0 },
+            loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InboxUiState())
 
