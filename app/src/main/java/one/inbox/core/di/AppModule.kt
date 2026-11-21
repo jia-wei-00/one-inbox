@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -13,6 +14,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import one.inbox.data.db.AppDatabase
 import one.inbox.data.db.InboxDao
+import one.inbox.summary.ClaudeSummarizer
+import one.inbox.summary.Summarizer
 import javax.inject.Singleton
 
 @Module
@@ -30,4 +33,11 @@ object AppModule {
     @Singleton
     fun settingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("settings") }
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class SummarizerModule {
+    @Binds
+    abstract fun summarizer(impl: ClaudeSummarizer): Summarizer
 }

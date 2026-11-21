@@ -64,6 +64,9 @@ abstract class InboxDao {
     @Query("SELECT * FROM messages WHERE unread = 1 ORDER BY timestamp ASC, id ASC")
     abstract suspend fun unread(): List<MessageEntity>
 
+    @Query("SELECT id FROM messages WHERE unread = 1 AND isFromMe = 0 ORDER BY id ASC")
+    abstract fun unreadIds(): Flow<List<Long>>
+
     @Query("SELECT dedupeKey FROM messages WHERE dedupeKey IN (:keys)")
     abstract suspend fun knownDedupeKeys(keys: Collection<String>): List<String>
 }

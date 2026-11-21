@@ -47,6 +47,7 @@ class InboxRepository @Inject constructor(private val dao: InboxDao) {
         if (ids.isNotEmpty()) dao.markRead(ids)
     }
     suspend fun unread(): List<MessageEntity> = dao.unread()
+    fun unreadIds(): Flow<List<Long>> = dao.unreadIds()
     suspend fun knownDedupeKeys(keys: Collection<String>): Set<String> =
         if (keys.isEmpty()) emptySet() else dao.knownDedupeKeys(keys).toSet()
 }
