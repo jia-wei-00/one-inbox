@@ -8,7 +8,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import one.inbox.BuildConfig
@@ -24,52 +26,62 @@ class InboxListenerService : NotificationListenerService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** Events are queued here and handled one at a time, in arrival order. */
+    private val events = Channel<suspend () -> Unit>(Channel.UNLIMITED)
+
+    init {
+        scope.launch {
+            for (event in events) {
+                try {
+                    event()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "event failed", e)
+                }
+            }
+        }
+    }
+
     override fun onListenerConnected() {
         ListenerState.connected.value = true
-        scope.launch {
-            try {
-                val allowed = settings.allowedPackages.first()
-                val active = activeSnapshots()
-                active.forEach { repository.save(NotificationParser.parse(it, allowed)) }
-                publishActive(allowed, active)
-            } catch (e: Exception) {
-                Log.w(TAG, "backfill failed", e)
-            }
+        events.trySend {
+            val allowed = settings.allowedPackages.first()
+            val active = activeSnapshots()
+            active.forEach { repository.save(NotificationParser.parse(it, allowed)) }
+            publishActive(allowed, active)
         }
     }
 
     override fun onListenerDisconnected() {
         ListenerState.connected.value = false
-        requestRebind(ComponentName(this, InboxListenerService::class.java))
+        try {
+            requestRebind(ComponentName(this, InboxListenerService::class.java))
+        } catch (e: Exception) {
+            Log.w(TAG, "requestRebind failed", e)
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        scope.launch {
-            try {
-                val allowed = settings.allowedPackages.first()
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "posted ${sbn.packageName} extras=${sbn.notification.extras?.keySet()}")
-                }
-                repository.save(NotificationParser.parse(SnapshotExtractor.from(sbn), allowed))
-                publishActive(allowed, activeSnapshots())
-            } catch (e: Exception) {
-                Log.w(TAG, "capture failed", e)
+        events.trySend {
+            val allowed = settings.allowedPackages.first()
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "posted ${sbn.packageName} extras=${sbn.notification.extras?.keySet()}")
             }
+            repository.save(NotificationParser.parse(SnapshotExtractor.from(sbn), allowed))
+            publishActive(allowed, activeSnapshots())
         }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        scope.launch {
-            try {
-                publishActive(settings.allowedPackages.first(), activeSnapshots())
-            } catch (e: Exception) {
-                Log.w(TAG, "active refresh failed", e)
-            }
+        events.trySend {
+            publishActive(settings.allowedPackages.first(), activeSnapshots())
         }
     }
 
     override fun onDestroy() {
+        events.close()
         scope.cancel()
         super.onDestroy()
     }
@@ -78,6 +90,8 @@ class InboxListenerService : NotificationListenerService() {
         (activeNotifications ?: emptyArray()).mapNotNull { sbn ->
             try {
                 SnapshotExtractor.from(sbn)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "skipping unreadable notification", e)
                 null
