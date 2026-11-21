@@ -18,6 +18,8 @@ import one.inbox.data.InboxRepository
 import one.inbox.data.db.AppDatabase
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -32,10 +34,11 @@ import org.robolectric.annotation.Config
 class ConversationViewModelTest {
     private lateinit var db: AppDatabase
     private lateinit var repo: InboxRepository
+    private val waIcon = ImageBitmap(4, 4)
 
     private val appInfo = object : AppInfoProvider {
         override fun label(pkg: String) = "label:$pkg"
-        override fun icon(pkg: String): ImageBitmap? = null
+        override fun icon(pkg: String): ImageBitmap? = if (pkg == "com.whatsapp") waIcon else null
         override fun isLaunchable(pkg: String) = true
         override fun launchIntent(pkg: String): Intent? = Intent("launch:$pkg")
     }
@@ -85,5 +88,14 @@ class ConversationViewModelTest {
     fun oneToOneHasNoPeopleCount() = runTest {
         repo.save(listOf(m("p", false, "Jason", false, "1", 1)))
         assertEquals(0, vm("p").state.first { it.messages.size == 1 }.peopleCount)
+    }
+
+    @Test
+    fun exposesConversationKeyAndAppIcon() = runTest {
+        repo.save(listOf(m("g", true, "Mom", false, "1", 1)))
+        val vm = vm("g")
+        assertEquals("g", vm.state.first { it.messages.size == 1 }.conversationKey)
+        assertSame(waIcon, vm.icon("com.whatsapp"))
+        assertNull(vm.icon("com.other"))
     }
 }

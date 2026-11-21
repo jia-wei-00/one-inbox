@@ -1,6 +1,7 @@
 package one.inbox.feature.conversation
 
 import android.content.Intent
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -26,6 +27,7 @@ data class ConversationUiState(
     val packageName: String = "",
     val peopleCount: Int = 0,
     val canOpenApp: Boolean = false,
+    val conversationKey: String = "",
 )
 
 @HiltViewModel
@@ -50,11 +52,15 @@ class ConversationViewModel @Inject constructor(
                     0
                 },
                 canOpenApp = conv?.let { appInfo.isLaunchable(it.packageName) } ?: false,
+                conversationKey = key,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ConversationUiState())
 
     suspend fun openAppIntent(): Intent? =
         repo.conversation(key).first()?.packageName?.let { appInfo.launchIntent(it) }
+
+    /** The source app's icon for the header dot; null when the app isn't installed. */
+    fun icon(packageName: String): ImageBitmap? = appInfo.icon(packageName)
 
     init {
         viewModelScope.launch { repo.markConversationRead(key) }
