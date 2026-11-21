@@ -15,6 +15,14 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash
+
+env:
+  # SHA-256 fingerprint of the release signing certificate (public; not a secret).
+  RELEASE_CERT_SHA256: 37b8493ea776b9ac5241d7cd35a4f14834ddfac31810cb224c9b9d3ae87042b6
+
 # Each release bumps the previous tag, so runs go one at a time and never cancel mid-publish.
 concurrency:
   group: release
@@ -22,17 +30,23 @@ concurrency:
 
 jobs:
   release:
+    # A workflow_dispatch from another branch must not publish.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
 
       - name: Compute version
         run: |
+          set -euo pipefail
           version=$(bash scripts/next-version.sh)
           echo "VERSION_NAME=$version" >> "$GITHUB_ENV"
+          # run_number is per workflow: renaming/recreating release.yml resets it, which would
+          # lower versionCode below installed builds. Raise the +100 offset if that ever happens.
           echo "VERSION_CODE=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_ENV"
           echo "Releasing v$version"
 
@@ -47,6 +61,7 @@ jobs:
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
+          set -euo pipefail
           if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
             echo "::error::RELEASE_KEYSTORE_BASE64 secret is missing; refusing to publish an unsigned APK."
             exit 1
@@ -60,18 +75,28 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
           chmod +x gradlew
           ./gradlew :app:testDebugUnitTest :app:assembleRelease --no-daemon
 
-      - name: Verify APK signature
+      - name: Verify APK signature and signer
         run: |
+          set -euo pipefail
           bt=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)
-          "${bt}apksigner" verify app/build/outputs/apk/release/app-release.apk
+          out=$("${bt}apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk)
+          actual=$(printf '%s\n' "$out" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr -d ': \r' | tr 'A-F' 'a-f')
+          expected=$(printf '%s' "$RELEASE_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::APK signer SHA-256 ($actual) does not match the release certificate ($expected)."
+            exit 1
+          fi
+          echo "Signer matches the release certificate."
 
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           apk="one-inbox-v${VERSION_NAME}.apk"
           cp app/build/outputs/apk/release/app-release.apk "$apk"
           if gh release view "v${VERSION_NAME}" >/dev/null 2>&1; then

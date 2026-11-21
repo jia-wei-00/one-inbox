@@ -35,7 +35,7 @@ An "ADB test" app appears in the rail with "Test chat" and two unread messages. 
 
 Every push to `main` runs `.github/workflows/release.yml`, which runs the unit tests, builds a signed release APK and publishes it as a GitHub Release (tag `vX.Y.Z`). Download `one-inbox-vX.Y.Z.apk` from the repository Releases page; each build has a higher versionCode, so it installs over the previous one.
 
-**Versions.** Each release bumps the minor number of the newest `vX.Y.Z` tag (`v1.0.0`, `v1.1.0`, `v1.2.0`, ...); the first release is `v1.0.0`. To force a major bump, push a `vN.0.0` tag first (for example `git tag v2.0.0 <commit> && git push origin v2.0.0`); the next release is then `v2.1.0`. `scripts/next-version.sh` prints the version a build would get.
+**Versions.** Each release bumps the minor number of the newest `vX.Y.Z` tag (`v1.0.0`, `v1.1.0`, `v1.2.0`, ...); the first release is `v1.0.0`. To force a major bump, tag the commit that is (or will become) the head of `main` with `vN.0.0` and push the tag (for example `git tag v2.0.0 <commit> && git push origin v2.0.0`). If that commit is the head of `main` when the release runs, it releases `vN.0.0` itself; any later commit then releases `vN.1.0`, `vN.2.0`, and so on. `scripts/next-version.sh` prints the version a build would get.
 
 **Secrets.** Set these repository secrets (Settings > Secrets and variables > Actions):
 

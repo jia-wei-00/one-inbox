@@ -20,8 +20,12 @@ fun secret(name: String): String =
 
 // Release signing, from local.properties or env (CI decodes the keystore from a GitHub secret):
 //   RELEASE_KEYSTORE_PATH, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
+// RELEASE_KEYSTORE_PATH is absolute or relative to the project root.
 // Without a keystore, `assembleRelease` still builds, just unsigned.
-val releaseKeystore = secret("RELEASE_KEYSTORE_PATH").takeIf { it.isNotEmpty() }?.let(::file)?.takeIf { it.exists() }
+val releaseKeystore = secret("RELEASE_KEYSTORE_PATH").takeIf { it.isNotEmpty() }?.let { path ->
+    rootProject.file(path).takeIf { it.exists() }
+        ?: null.also { logger.warn("RELEASE_KEYSTORE_PATH is set but no file exists there; building release unsigned.") }
+}
 
 android {
     namespace = "one.inbox"
