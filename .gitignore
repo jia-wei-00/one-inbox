@@ -3,3 +3,6 @@ build/
 .gradle/
 .idea/
 *.apk
+*.jks
+*.keystore
+release.properties

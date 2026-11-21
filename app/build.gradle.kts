@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -8,6 +10,19 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun secret(name: String): String =
+    (localProperties.getProperty(name) ?: System.getenv(name) ?: "").trim().trim('"')
+
+// Release signing, from local.properties or env (CI decodes the keystore from a GitHub secret):
+//   RELEASE_KEYSTORE_PATH, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
+// Without a keystore, `assembleRelease` still builds, just unsigned.
+val releaseKeystore = secret("RELEASE_KEYSTORE_PATH").takeIf { it.isNotEmpty() }?.let(::file)?.takeIf { it.exists() }
+
 android {
     namespace = "one.inbox"
     compileSdk = 36
@@ -16,13 +31,25 @@ android {
         applicationId = "one.inbox"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = secret("VERSION_CODE").toIntOrNull() ?: 1
+        versionName = secret("VERSION_NAME").ifEmpty { "1.0" }
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = secret("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = secret("RELEASE_KEY_ALIAS")
+                keyPassword = secret("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

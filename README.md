@@ -30,3 +30,20 @@ adb shell cmd notification post -S messaging --conversation "Test chat" --messag
 ```
 
 An "ADB test" app appears in the rail with "Test chat" and two unread messages. `cmd notification post` stamps every message with the current time, so running the command again adds two new messages; that is expected and does not show a dedupe bug. Dedupe of reposted notifications is covered by the unit tests (`NotificationParserTest`) and by real chat-app reposts.
+
+## Releases
+
+Every push to `main` runs `.github/workflows/release.yml`, which runs the unit tests, builds a signed release APK and publishes it as a GitHub Release (tag `vX.Y.Z`). Download `one-inbox-vX.Y.Z.apk` from the repository Releases page; each build has a higher versionCode, so it installs over the previous one.
+
+**Versions.** Each release bumps the minor number of the newest `vX.Y.Z` tag (`v1.0.0`, `v1.1.0`, `v1.2.0`, ...); the first release is `v1.0.0`. To force a major bump, push a `vN.0.0` tag first (for example `git tag v2.0.0 <commit> && git push origin v2.0.0`); the next release is then `v2.1.0`. `scripts/next-version.sh` prints the version a build would get.
+
+**Secrets.** Set these repository secrets (Settings > Secrets and variables > Actions):
+
+- `RELEASE_KEYSTORE_BASE64`: the release keystore, base64-encoded
+- `RELEASE_KEYSTORE_PASSWORD`
+- `RELEASE_KEY_ALIAS`
+- `RELEASE_KEY_PASSWORD`
+
+The signing key lives outside the repo (`*.jks` and `*.keystore` are git-ignored). Back it up somewhere safe: if it is lost, new builds can no longer update installed copies, and you would have to uninstall and reinstall.
+
+Without these values, `./gradlew :app:assembleRelease` still works locally and produces an unsigned APK.
