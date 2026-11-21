@@ -27,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +43,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var draft by rememberSaveable { mutableStateOf("") }
+    var draft by remember { mutableStateOf("") }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -75,8 +74,7 @@ fun SettingsScreen(
                     Button(
                         enabled = draft.isNotBlank(),
                         onClick = {
-                            viewModel.saveKey(draft)
-                            draft = ""
+                            viewModel.saveKey(draft) { draft = "" }
                         },
                     ) { Text("Save") }
                     OutlinedButton(enabled = state.hasKey, onClick = viewModel::clearKey) { Text("Clear") }

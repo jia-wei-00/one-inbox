@@ -16,6 +16,7 @@ import javax.inject.Inject
 interface AppInfoProvider {
     fun label(pkg: String): String
     fun icon(pkg: String): ImageBitmap?
+    fun isLaunchable(pkg: String): Boolean
 }
 
 class PackageAppInfoProvider @Inject constructor(
@@ -30,6 +31,9 @@ class PackageAppInfoProvider @Inject constructor(
             pkg
         }
     }
+
+    override fun isLaunchable(pkg: String): Boolean =
+        context.packageManager.getLaunchIntentForPackage(pkg) != null
 
     override fun icon(pkg: String): ImageBitmap? = try {
         context.packageManager.getApplicationIcon(pkg).toBitmap().asImageBitmap()

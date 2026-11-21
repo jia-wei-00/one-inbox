@@ -35,6 +35,7 @@ class InboxViewModelTest {
     private val appInfo = object : AppInfoProvider {
         override fun label(pkg: String) = "label:$pkg"
         override fun icon(pkg: String): ImageBitmap? = null
+        override fun isLaunchable(pkg: String) = true
     }
     private val access = object : AccessChecker {
         override fun hasNotificationAccess() = true

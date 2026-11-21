@@ -72,6 +72,7 @@ class CatchUpViewModelTest {
     private val appInfo = object : AppInfoProvider {
         override fun label(pkg: String) = "label:$pkg"
         override fun icon(pkg: String): ImageBitmap? = null
+        override fun isLaunchable(pkg: String) = true
     }
 
     @Before

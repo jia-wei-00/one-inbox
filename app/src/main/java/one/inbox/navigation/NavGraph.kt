@@ -40,7 +40,7 @@ fun OneInboxNavGraph(onboardingDone: Boolean) {
         composable<OnboardingRoute> {
             OnboardingScreen(
                 onDone = {
-                    nav.navigate(InboxRoute) { popUpTo<OnboardingRoute> { inclusive = true } }
+                    nav.navigate(InboxRoute) { popUpTo(nav.graph.id) { inclusive = true } }
                 },
             )
         }

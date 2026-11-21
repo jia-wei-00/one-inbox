@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import one.inbox.BuildConfig
 import one.inbox.core.AppInfoProvider
 import one.inbox.core.ChatApps
 import one.inbox.data.settings.ApiKeyStore
@@ -42,7 +43,8 @@ class SettingsViewModel @Inject constructor(
     val state: StateFlow<SettingsUiState> = combine(
         hasKey, keyMessage, settings.allowedPackages, settings.seenPackages,
     ) { key, msg, allowed, seen ->
-        val packages = (ChatApps.DEFAULT.keys + seen + allowed).filter { it != OWN_PACKAGE }.distinct()
+        val packages = (ChatApps.DEFAULT.keys + allowed + seen.filter(appInfo::isLaunchable))
+            .filter { it != BuildConfig.APPLICATION_ID }.distinct()
         val apps = packages.map { AppToggle(it, appInfo.label(it), it in allowed) }
             .sortedBy { it.label.lowercase() }
         SettingsUiState(key, msg, apps)
@@ -54,13 +56,14 @@ class SettingsViewModel @Inject constructor(
 
     fun icon(packageName: String): ImageBitmap? = appInfo.icon(packageName)
 
-    fun saveKey(raw: String) {
+    fun saveKey(raw: String, onSaved: () -> Unit = {}) {
         val key = raw.trim()
         if (key.isEmpty()) return
         viewModelScope.launch {
             keyMessage.value = try {
                 withContext(Dispatchers.IO) { apiKeys.set(key) }
                 hasKey.value = true
+                onSaved()
                 MSG_KEY_SAVED
             } catch (e: CancellationException) {
                 throw e
@@ -72,9 +75,15 @@ class SettingsViewModel @Inject constructor(
 
     fun clearKey() {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { apiKeys.clear() }
-            hasKey.value = false
-            keyMessage.value = null
+            try {
+                withContext(Dispatchers.IO) { apiKeys.clear() }
+                hasKey.value = false
+                keyMessage.value = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                keyMessage.value = MSG_KEY_SAVE_FAILED
+            }
         }
     }
 
@@ -90,7 +99,4 @@ class SettingsViewModel @Inject constructor(
         null
     }
 
-    private companion object {
-        const val OWN_PACKAGE = "one.inbox"
-    }
 }
