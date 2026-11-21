@@ -156,7 +156,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.section(
                         withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(it) }
                         append(" ")
                     }
-                    label?.let { append("(${it.appName}): ") }
+                    label?.appName?.let { append("($it): ") }
                     append(item.summary)
                 },
                 style = MaterialTheme.typography.bodyMedium,

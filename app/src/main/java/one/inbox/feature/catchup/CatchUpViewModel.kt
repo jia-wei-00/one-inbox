@@ -22,8 +22,8 @@ const val MSG_NO_UNREAD = "Nothing unread 🎉"
 const val MSG_NO_API_KEY = "Add your Claude API key in Settings"
 const val MSG_REFUSED = "Claude declined to summarize this batch."
 
-/** Display-ready name parts for one summarized conversation. [title] is null if the conversation row is gone. */
-data class ItemLabel(val title: String?, val appName: String)
+/** Display-ready name parts for one summarized conversation. [title] is null if the conversation row is gone; [appName] is null only if the key is malformed. */
+data class ItemLabel(val title: String?, val appName: String?)
 
 data class CatchUpUiState(
     val latest: StoredCatchUp? = null,
@@ -55,8 +55,10 @@ class CatchUpViewModel @Inject constructor(
     private suspend fun labelsFor(stored: StoredCatchUp): Map<String, ItemLabel> {
         val c = stored.catchUp
         return (c.needsReply + c.worthKnowing + c.lowPriority).map { it.conversationKey }.distinct()
-            .mapNotNull { key ->
-                inbox.conversation(key).first()?.let { key to ItemLabel(it.title, appInfo.label(it.packageName)) }
+            .map { key ->
+                val conv = inbox.conversation(key).first()
+                val pkg = conv?.packageName ?: key.split("|", limit = 3).takeIf { it.size >= 3 }?.get(1)
+                key to ItemLabel(conv?.title, pkg?.let(appInfo::label))
             }.toMap()
     }
 

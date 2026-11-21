@@ -50,7 +50,9 @@ private class FakeKeyStore(var key: String?) : ApiKeyStore {
 }
 
 private class GatedSummarizer(val gate: CompletableDeferred<Unit>, val json: String) : Summarizer {
+    var calls = 0
     override suspend fun summarize(prompt: String, apiKey: String): SummarizeResult {
+        calls++
         gate.await()
         return SummarizeResult.Json(json)
     }
@@ -109,12 +111,14 @@ class CatchUpViewModelTest {
     fun summarizeShowsRunningThenLatest() = runTest {
         seed()
         val gate = CompletableDeferred<Unit>()
-        val vm = vm("k", GatedSummarizer(gate, REPLY_JSON))
+        val summarizer = GatedSummarizer(gate, REPLY_JSON)
+        val vm = vm("k", summarizer)
         vm.summarize()
         assertTrue(vm.state.first { it.running }.running)
         vm.summarize() // ignored while running
         gate.complete(Unit)
         val s = vm.state.first { !it.running && it.latest != null }
+        assertEquals(1, summarizer.calls)
         assertNull(s.message)
         assertEquals(2, s.latest!!.unreadCount)
         val label = s.labels["tg:bob"]
@@ -142,10 +146,23 @@ class CatchUpViewModelTest {
         vm.summarize()
         vm.state.first { it.latest != null && !it.running }
         assertEquals(2, inbox.unread().size)
+        inbox.save(listOf(CapturedMessage("wa:alice", "com.whatsapp", "Alice", false, "A", false, "later", 3000, "late")))
         vm.markAllRead()
         withContext(Dispatchers.Default) {
-            withTimeout(5_000) { while (inbox.unread().isNotEmpty()) delay(20) }
+            withTimeout(5_000) { while (inbox.unread().size > 1) delay(20) }
         }
-        assertEquals(0, inbox.unread().size)
+        assertEquals(listOf("late"), inbox.unread().map { it.dedupeKey })
+    }
+
+    @Test
+    fun missingConversationRowFallsBackToAppNameFromKey() = runTest {
+        val key = "0|com.whatsapp|Ghost"
+        inbox.save(listOf(CapturedMessage(key, "com.whatsapp", "Ghost", false, "G", false, "boo", 1000, "g")))
+        db.openHelper.writableDatabase.execSQL("DELETE FROM conversations")
+        val json = """{"needs_reply":[{"conversation_id":"c1","summary":"Ghost says boo"}],"worth_knowing":[],"low_priority":[]}"""
+        val vm = vm("k", GatedSummarizer(CompletableDeferred<Unit>().also { it.complete(Unit) }, json))
+        vm.summarize()
+        val s = vm.state.first { it.latest != null && !it.running }
+        assertEquals(ItemLabel(title = null, appName = "label:com.whatsapp"), s.labels[key])
     }
 }
