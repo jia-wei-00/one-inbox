@@ -5,15 +5,15 @@
 # - No tags: 1.0.0.
 set -euo pipefail
 
-pattern='v[0-9]*.[0-9]*.[0-9]*'
+semver='^v[0-9]+\.[0-9]+\.[0-9]+$'
 
-current=$(git tag --points-at HEAD -l "$pattern" --sort=-v:refname | head -n1)
+current=$(git tag --points-at HEAD --sort=-v:refname | grep -E "$semver" | head -n1 || true)
 if [ -n "$current" ]; then
   echo "${current#v}"
   exit 0
 fi
 
-latest=$(git tag -l "$pattern" --sort=-v:refname | head -n1)
+latest=$(git tag -l --sort=-v:refname | grep -E "$semver" | head -n1 || true)
 if [ -z "$latest" ]; then
   echo "1.0.0"
   exit 0

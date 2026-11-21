@@ -1,6 +1,6 @@
 # One Inbox
 
-A personal Android app that captures chat notifications (WhatsApp, Messenger, Instagram, Telegram, Discord, LinkedIn, X) into a local inbox, grouped by app and conversation, and summarizes unread messages with Claude. Everything stays on the device except the text sent to the Claude API when you tap Summarize. Requires Android 12 (API 31) or later.
+A personal Android app that captures chat notifications (WhatsApp, Messenger, Instagram, Telegram, Discord, LinkedIn, X) into a local inbox, grouped by app and conversation, and summarizes unread messages with Claude. Everything stays on the device except the text sent to the Claude API when you tap Summarize. Requires Android 11 (API 30) or newer.
 
 ## Build and install
 
@@ -39,11 +39,13 @@ Every push to `main` runs `.github/workflows/release.yml`, which runs the unit t
 
 **Secrets.** Set these repository secrets (Settings > Secrets and variables > Actions):
 
-- `RELEASE_KEYSTORE_BASE64`: the release keystore, base64-encoded
+- `RELEASE_KEYSTORE_BASE64`: the release keystore, base64-encoded. Set it with bash: `base64 -w0 one-inbox-release.jks | gh secret set RELEASE_KEYSTORE_BASE64`, or with PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("one-inbox-release.jks")) | gh secret set RELEASE_KEYSTORE_BASE64`
 - `RELEASE_KEYSTORE_PASSWORD`
 - `RELEASE_KEY_ALIAS`
 - `RELEASE_KEY_PASSWORD`
 
 The signing key lives outside the repo (`*.jks` and `*.keystore` are git-ignored). Back it up somewhere safe: if it is lost, new builds can no longer update installed copies, and you would have to uninstall and reinstall.
+
+Note: don't re-run an old failed release run after a newer commit was released.
 
 Without these values, `./gradlew :app:assembleRelease` still works locally and produces an unsigned APK.
