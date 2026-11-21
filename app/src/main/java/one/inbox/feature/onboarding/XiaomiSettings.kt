@@ -1,12 +1,12 @@
 package one.inbox.feature.onboarding
 
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 
-/** Settings screens the first-run checklist opens. Xiaomi screens may not exist, so callers use [firstResolvable]. */
+/** Settings screens the first-run checklist opens. Xiaomi screens may be missing or unexported, so callers use [launchFirst]. */
 object XiaomiSettings {
     private const val APP_LABEL = "One Inbox"
 
@@ -30,6 +30,15 @@ object XiaomiSettings {
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg"))
 }
 
-/** First intent that resolves to an activity; the last one when none do. */
-fun firstResolvable(pm: PackageManager, vararg intents: Intent): Intent =
-    intents.firstOrNull { pm.resolveActivity(it, 0) != null } ?: intents.last()
+/**
+ * Starts the first intent that actually launches. A screen can resolve yet still throw (e.g. an
+ * unexported HyperOS activity raises SecurityException), so each is tried in order. False if none open.
+ */
+fun launchFirst(context: Context, vararg intents: Intent): Boolean = intents.any { intent ->
+    try {
+        context.startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (_: Exception) {
+        false
+    }
+}

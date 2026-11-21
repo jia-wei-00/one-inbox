@@ -14,6 +14,8 @@ data class UnreadMessage(
     val sender: String,
     val text: String,
     val timestamp: Long,
+    /** The owner's own message, sent as context only: never counted, never included in [SummaryInput.includedIds]. */
+    val isFromMe: Boolean = false,
 )
 
 data class SummaryInput(
@@ -43,16 +45,24 @@ fun buildSummaryInput(
         val mid = (lo + hi) / 2
         if (render(oldestFirst.drop(mid), zone).prompt.length <= maxChars) hi = mid else lo = mid + 1
     }
-    val kept = oldestFirst.drop(lo)
+    val unread = oldestFirst.drop(lo).filter { !it.isFromMe }
+    // Own messages are context for unread ones; a conversation whose unread were all dropped goes too.
+    val unreadConversations = unread.map { it.conversationKey }.toSet()
+    val kept = oldestFirst.drop(lo).filter { !it.isFromMe || it.conversationKey in unreadConversations }
     val rendered = render(kept, zone)
     return SummaryInput(
         prompt = rendered.prompt,
-        includedIds = kept.map { it.id },
+        includedIds = unread.map { it.id },
         conversationIds = rendered.conversationIds,
-        droppedCount = lo,
-        appCount = kept.map { it.appName }.distinct().size,
+        droppedCount = oldestFirst.take(lo).count { !it.isFromMe },
+        appCount = unread.map { it.appName }.distinct().size,
     )
 }
+
+private val lineBreaks = Regex("[\r\n]+")
+
+/** Line breaks in captured text could forge a "### cN" header, so each field renders on one line. */
+private fun oneLine(s: String): String = s.replace(lineBreaks, " ")
 
 private class Rendered(val prompt: String, val conversationIds: Map<String, String>)
 
@@ -73,9 +83,9 @@ private fun render(oldestFirst: List<UnreadMessage>, zone: ZoneId): Rendered {
             ids[id] = group.first().conversationKey
             val first = group.first()
             if (index > 0) append('\n')
-            append("### $id · ${first.appName} · ${first.conversationTitle} (${if (first.isGroup) "group" else "direct"})\n")
+            append("### $id · ${first.appName} · ${oneLine(first.conversationTitle)} (${if (first.isGroup) "group" else "direct"})\n")
             group.forEach { m ->
-                append("[${format.format(Instant.ofEpochMilli(m.timestamp))}] ${m.sender}: ${m.text}\n")
+                append("[${format.format(Instant.ofEpochMilli(m.timestamp))}] ${oneLine(m.sender)}: ${oneLine(m.text)}\n")
             }
         }
     }

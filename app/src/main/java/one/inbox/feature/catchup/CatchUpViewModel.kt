@@ -3,7 +3,6 @@ package one.inbox.feature.catchup
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -39,15 +38,22 @@ class CatchUpViewModel @Inject constructor(
     private val inbox: InboxRepository,
     private val appInfo: AppInfoProvider,
 ) : ViewModel() {
-    private val running = MutableStateFlow(false)
-    private val message = MutableStateFlow<String?>(null)
+    private val message = repo.lastOutcome.map { outcome ->
+        when (outcome) {
+            null, is CatchUpOutcome.Done -> null
+            CatchUpOutcome.NoUnread -> MSG_NO_UNREAD
+            CatchUpOutcome.NoApiKey -> MSG_NO_API_KEY
+            CatchUpOutcome.Refused -> MSG_REFUSED
+            is CatchUpOutcome.Failed -> outcome.message
+        }
+    }
 
     private val latestWithLabels = repo.latest.map { stored ->
         stored to (stored?.let { labelsFor(it) } ?: emptyMap())
     }
 
     val state: StateFlow<CatchUpUiState> = combine(
-        latestWithLabels, repo.newSinceCount, running, message,
+        latestWithLabels, repo.newSinceCount, repo.running, message,
     ) { (latest, labels), newSince, isRunning, msg ->
         CatchUpUiState(latest, newSince, isRunning, msg, labels)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CatchUpUiState())
@@ -62,22 +68,8 @@ class CatchUpViewModel @Inject constructor(
             }.toMap()
     }
 
-    fun summarize() {
-        if (!running.compareAndSet(false, true)) return
-        viewModelScope.launch {
-            try {
-                message.value = when (val outcome = repo.run()) {
-                    is CatchUpOutcome.Done -> null
-                    CatchUpOutcome.NoUnread -> MSG_NO_UNREAD
-                    CatchUpOutcome.NoApiKey -> MSG_NO_API_KEY
-                    CatchUpOutcome.Refused -> MSG_REFUSED
-                    is CatchUpOutcome.Failed -> outcome.message
-                }
-            } finally {
-                running.value = false
-            }
-        }
-    }
+    /** Runs in the repository's application scope, so closing this screen does not cancel it. */
+    fun summarize() = repo.start()
 
     fun markAllRead() {
         viewModelScope.launch { repo.markSummaryRead() }

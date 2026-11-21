@@ -1,7 +1,6 @@
 package one.inbox.feature.onboarding
 
 import android.content.Context
-import android.content.Intent
 import android.os.PowerManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,6 +38,7 @@ fun OnboardingScreen(
     val context = LocalContext.current
     var hasAccess by rememberSaveable { mutableStateOf(viewModel.hasNotificationAccess()) }
     var batteryOk by rememberSaveable { mutableStateOf(isIgnoringBattery(context)) }
+    var batteryConfirmed by rememberSaveable { mutableStateOf(false) }
     var autostartDone by rememberSaveable { mutableStateOf(false) }
     var lockedInRecents by rememberSaveable { mutableStateOf(false) }
 
@@ -58,22 +58,21 @@ fun OnboardingScreen(
                 title = "1. Notification access",
                 status = if (hasAccess) "Granted" else "Needed",
                 hint = "Greyed out? Open App info → ⋮ → Allow restricted settings, then try again.",
-                onOpen = { open(context, XiaomiSettings.notificationAccessIntent()) },
+                onOpen = { launchFirst(context, XiaomiSettings.notificationAccessIntent()) },
             )
             StepCard(
                 title = "2. Battery: No restrictions",
-                status = if (batteryOk) "Done" else "Not done",
+                // HyperOS "No restrictions" may not show up in PowerManager, so the owner can confirm it.
+                status = if (batteryOk || batteryConfirmed) "Done" else "Set it, then tick the box",
+                checked = batteryConfirmed,
+                onChecked = { batteryConfirmed = it },
                 onOpen = {
-                    val pm = context.packageManager
                     val pkg = context.packageName
-                    open(
+                    launchFirst(
                         context,
-                        firstResolvable(
-                            pm,
-                            XiaomiSettings.batteryIntent(pkg),
-                            XiaomiSettings.ignoreBatteryOptimizationsIntent(pkg),
-                            XiaomiSettings.appDetailsIntent(pkg),
-                        ),
+                        XiaomiSettings.batteryIntent(pkg),
+                        XiaomiSettings.ignoreBatteryOptimizationsIntent(pkg),
+                        XiaomiSettings.appDetailsIntent(pkg),
                     )
                 },
             )
@@ -83,11 +82,7 @@ fun OnboardingScreen(
                 checked = autostartDone,
                 onChecked = { autostartDone = it },
                 onOpen = {
-                    val pm = context.packageManager
-                    open(
-                        context,
-                        firstResolvable(pm, XiaomiSettings.autostartIntent(), XiaomiSettings.appDetailsIntent(context.packageName)),
-                    )
+                    launchFirst(context, XiaomiSettings.autostartIntent(), XiaomiSettings.appDetailsIntent(context.packageName))
                 },
             )
             StepCard(
@@ -131,11 +126,3 @@ private fun StepCard(
 private fun isIgnoringBattery(context: Context): Boolean =
     (context.getSystemService(Context.POWER_SERVICE) as PowerManager)
         .isIgnoringBatteryOptimizations(context.packageName)
-
-private fun open(context: Context, intent: Intent) {
-    try {
-        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    } catch (_: Exception) {
-        // The screen may be missing or not exported on this ROM; nothing more we can offer.
-    }
-}

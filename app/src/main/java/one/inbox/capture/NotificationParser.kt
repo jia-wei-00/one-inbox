@@ -40,8 +40,13 @@ object NotificationParser {
                 if (isPlaceholder(text)) return@mapNotNull null
                 val fromMe = m.sender == null || m.sender == s.selfName
                 val sender = if (fromMe) "You" else m.sender!!
-                val ts = if (m.timestamp <= 0) s.postTime else m.timestamp
-                build(sender, fromMe, text, ts, "$key|$sender|$ts|$text")
+                // Without its own timestamp a message borrows postTime, which changes on every repost,
+                // so it must not enter the dedupe key.
+                if (m.timestamp <= 0) {
+                    build(sender, fromMe, text, s.postTime, "$key|$sender|$text")
+                } else {
+                    build(sender, fromMe, text, m.timestamp, "$key|$sender|${m.timestamp}|$text")
+                }
             }
         }
 

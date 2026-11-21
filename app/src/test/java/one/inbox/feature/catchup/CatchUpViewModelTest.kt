@@ -3,10 +3,12 @@ package one.inbox.feature.catchup
 import android.content.Context
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -50,7 +52,7 @@ private class FakeKeyStore(var key: String?) : ApiKeyStore {
 }
 
 private class GatedSummarizer(val gate: CompletableDeferred<Unit>, val json: String) : Summarizer {
-    var calls = 0
+    @Volatile var calls = 0
     override suspend fun summarize(prompt: String, apiKey: String): SummarizeResult {
         calls++
         gate.await()
@@ -89,17 +91,20 @@ class CatchUpViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun TestScope.vm(key: String?, summarizer: Summarizer): CatchUpViewModel {
-        val repo = CatchUpRepository(
-            inbox,
-            SettingsStore(PreferenceDataStoreFactory.create(scope = backgroundScope) { File(tmp.root, "t.preferences_pb") }),
-            FakeKeyStore(key),
-            summarizer,
-        )
-        return CatchUpViewModel(repo, inbox, appInfo).also {
+    private fun TestScope.repo(key: String?, summarizer: Summarizer) = CatchUpRepository(
+        inbox,
+        SettingsStore(PreferenceDataStoreFactory.create(scope = backgroundScope) { File(tmp.root, "t.preferences_pb") }),
+        FakeKeyStore(key),
+        summarizer,
+        backgroundScope, // stands in for the application scope: outlives the ViewModel
+    )
+
+    private fun TestScope.vm(repo: CatchUpRepository): CatchUpViewModel =
+        CatchUpViewModel(repo, inbox, appInfo).also {
             it.state.onEach { }.launchIn(backgroundScope)
         }
-    }
+
+    private fun TestScope.vm(key: String?, summarizer: Summarizer): CatchUpViewModel = vm(repo(key, summarizer))
 
     private suspend fun seed() = inbox.save(
         listOf(
@@ -126,6 +131,25 @@ class CatchUpViewModelTest {
         assertNotNull(label)
         assertEquals("Bob", label!!.title)
         assertEquals("label:org.telegram.messenger", label.appName)
+    }
+
+    @Test
+    fun closingTheScreenMidRunStillStoresTheSummary() = runTest {
+        seed()
+        val gate = CompletableDeferred<Unit>()
+        val summarizer = GatedSummarizer(gate, REPLY_JSON)
+        val repo = repo("k", summarizer)
+        val vm = vm(repo)
+        vm.summarize()
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000) { while (summarizer.calls == 0) delay(10) }
+        }
+        vm.viewModelScope.cancel() // what ViewModel.onCleared does when the screen is popped
+        gate.complete(Unit)
+        val stored = withContext(Dispatchers.Default) {
+            withTimeout(5_000) { repo.latest.first { it != null } }
+        }
+        assertEquals(2, stored!!.unreadCount)
     }
 
     @Test

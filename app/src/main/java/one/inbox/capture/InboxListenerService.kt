@@ -7,10 +7,12 @@ import android.util.Log
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import one.inbox.BuildConfig
@@ -43,18 +45,29 @@ class InboxListenerService : NotificationListenerService() {
         }
     }
 
+    /** Re-reads the showing notifications, so newly allowed apps get captured and the health snapshot stays fresh. */
+    private val rescan: suspend () -> Unit = {
+        publishActive(settings.allowedPackages.first(), activeSnapshots())
+    }
+
+    private var rescanLoop: Job? = null
+
     override fun onListenerConnected() {
         ListenerState.connected.value = true
-        events.trySend {
-            val allowed = settings.allowedPackages.first()
-            val active = activeSnapshots()
-            active.forEach { repository.save(NotificationParser.parse(it, allowed)) }
-            publishActive(allowed, active)
+        events.trySend(rescan)
+        rescanLoop?.cancel()
+        rescanLoop = scope.launch {
+            while (true) {
+                delay(RESCAN_INTERVAL_MS)
+                events.trySend(rescan)
+            }
         }
     }
 
     override fun onListenerDisconnected() {
         ListenerState.connected.value = false
+        rescanLoop?.cancel()
+        rescanLoop = null
         try {
             requestRebind(ComponentName(this, InboxListenerService::class.java))
         } catch (e: Exception) {
@@ -105,11 +118,15 @@ class InboxListenerService : NotificationListenerService() {
             }
         }
 
-    private fun publishActive(allowed: Set<String>, snapshots: List<NotificationSnapshot>) {
-        ListenerState.activeMessages.value = snapshots.flatMap { NotificationParser.parse(it, allowed) }
+    /** Saves the showing messages (save dedupes) and publishes them for the health check. */
+    private suspend fun publishActive(allowed: Set<String>, snapshots: List<NotificationSnapshot>) {
+        val active = snapshots.flatMap { NotificationParser.parse(it, allowed) }
+        repository.save(active)
+        ListenerState.activeMessages.value = active
     }
 
     private companion object {
         const val TAG = "InboxListener"
+        const val RESCAN_INTERVAL_MS = 15 * 60 * 1000L
     }
 }

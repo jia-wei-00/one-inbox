@@ -36,7 +36,7 @@ class ClaudeSummarizer @Inject constructor() : Summarizer {
                         SummarizeResult.Refused
                     } else {
                         val text = message.content()
-                            .flatMap { it.text().stream().toList() }
+                            .flatMap { listOfNotNull(it.text().orElse(null)) }
                             .joinToString("") { it.text() }
                         SummarizeResult.Json(text)
                     }

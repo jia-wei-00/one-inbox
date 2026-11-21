@@ -12,10 +12,14 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import one.inbox.data.db.AppDatabase
 import one.inbox.data.db.InboxDao
 import one.inbox.summary.ClaudeSummarizer
 import one.inbox.summary.Summarizer
+import javax.inject.Qualifier
 import javax.inject.Singleton
 
 @Module
@@ -33,7 +37,17 @@ object AppModule {
     @Singleton
     fun settingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("settings") }
+
+    @Provides
+    @Singleton
+    @ApplicationScope
+    fun applicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 }
+
+/** Process-lifetime scope for work that must outlive any screen. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ApplicationScope
 
 @Module
 @InstallIn(SingletonComponent::class)

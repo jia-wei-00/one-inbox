@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,13 +41,15 @@ class SettingsViewModel @Inject constructor(
     private val hasKey = MutableStateFlow(false)
     private val keyMessage = MutableStateFlow<String?>(null)
 
-    val state: StateFlow<SettingsUiState> = combine(
-        hasKey, keyMessage, settings.allowedPackages, settings.seenPackages,
-    ) { key, msg, allowed, seen ->
+    // PackageManager lookups (isLaunchable, label) stay off the main thread.
+    private val apps = combine(settings.allowedPackages, settings.seenPackages) { allowed, seen ->
         val packages = (ChatApps.DEFAULT.keys + allowed + seen.filter(appInfo::isLaunchable))
             .filter { it != BuildConfig.APPLICATION_ID }.distinct()
-        val apps = packages.map { AppToggle(it, appInfo.label(it), it in allowed) }
+        packages.map { AppToggle(it, appInfo.label(it), it in allowed) }
             .sortedBy { it.label.lowercase() }
+    }.flowOn(Dispatchers.Default)
+
+    val state: StateFlow<SettingsUiState> = combine(hasKey, keyMessage, apps) { key, msg, apps ->
         SettingsUiState(key, msg, apps)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 

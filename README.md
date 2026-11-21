@@ -29,4 +29,4 @@ Debug builds also capture notifications posted from adb:
 adb shell cmd notification post -S messaging --conversation "Test chat" --message "Alex:明天见 😊" --message "Sam:see you" one_inbox_test "x"
 ```
 
-An "ADB test" app appears in the rail with "Test chat" and two unread messages. Posting it again does not duplicate them.
+An "ADB test" app appears in the rail with "Test chat" and two unread messages. `cmd notification post` stamps every message with the current time, so running the command again adds two new messages; that is expected and does not show a dedupe bug. Dedupe of reposted notifications is covered by the unit tests (`NotificationParserTest`) and by real chat-app reposts.

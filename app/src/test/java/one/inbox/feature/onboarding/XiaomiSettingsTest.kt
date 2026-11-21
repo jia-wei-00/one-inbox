@@ -1,53 +1,76 @@
 package one.inbox.feature.onboarding
 
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.provider.Settings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+
+/** Records launch attempts; intents whose component class (or action) is in [failures] throw. */
+private class LaunchRecorder(base: Context, private val failures: Map<String, Exception>) : ContextWrapper(base) {
+    val attempts = mutableListOf<Intent>()
+    var started: Intent? = null
+
+    override fun startActivity(intent: Intent) {
+        attempts += intent
+        failures[intent.component?.className ?: intent.action]?.let { throw it }
+        started = intent
+    }
+}
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class XiaomiSettingsTest {
     private val context = RuntimeEnvironment.getApplication()
+    private val autostart = XiaomiSettings.autostartIntent()
+    private val battery = XiaomiSettings.batteryIntent("one.inbox")
+    private val details = XiaomiSettings.appDetailsIntent("one.inbox")
 
     @Test
-    fun firstResolvableFallsBackToAppDetails() {
-        val pm = context.packageManager
-        val details = XiaomiSettings.appDetailsIntent("one.inbox")
-        val info = ActivityInfo().apply {
-            packageName = "com.android.settings"
-            name = "InstalledAppDetails"
-        }
-        shadowOf(pm).addOrUpdateActivity(info)
-        shadowOf(pm).addIntentFilterForActivity(
-            ComponentName(info.packageName, info.name),
-            android.content.IntentFilter(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                addDataScheme("package")
-            },
+    fun launchFirstSkipsUnexportedAndMissingScreens() {
+        val ctx = LaunchRecorder(
+            context,
+            mapOf(
+                autostart.component!!.className to SecurityException("not exported"),
+                battery.component!!.className to ActivityNotFoundException(),
+            ),
         )
-        val chosen = firstResolvable(pm, XiaomiSettings.autostartIntent(), XiaomiSettings.batteryIntent("one.inbox"), details)
-        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, chosen.action)
+        assertTrue(launchFirst(ctx, autostart, battery, details))
+        assertEquals(3, ctx.attempts.size)
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, ctx.started!!.action)
+        assertTrue(ctx.started!!.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
     }
 
     @Test
-    fun firstResolvablePrefersFirstMatch() {
-        val pm = context.packageManager
-        val autostart = XiaomiSettings.autostartIntent()
-        shadowOf(pm).addOrUpdateActivity(
-            ActivityInfo().apply {
-                packageName = autostart.component!!.packageName
-                name = autostart.component!!.className
-            },
+    fun launchFirstStopsAtFirstSuccess() {
+        val ctx = LaunchRecorder(context, emptyMap())
+        assertTrue(launchFirst(ctx, autostart, details))
+        assertEquals(1, ctx.attempts.size)
+        assertEquals(autostart.component, ctx.started!!.component)
+    }
+
+    @Test
+    fun launchFirstReportsFailureWhenNothingOpens() {
+        val ctx = LaunchRecorder(
+            context,
+            mapOf(
+                autostart.component!!.className to SecurityException("not exported"),
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS to ActivityNotFoundException(),
+            ),
         )
-        val chosen = firstResolvable(pm, autostart, XiaomiSettings.appDetailsIntent("one.inbox"))
-        assertEquals(autostart.component, chosen.component)
+        assertFalse(launchFirst(ctx, autostart, details))
+        assertEquals(2, ctx.attempts.size)
+        assertNull(ctx.started)
     }
 
     @Test

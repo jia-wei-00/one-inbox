@@ -14,6 +14,7 @@ import one.inbox.data.settings.ApiKeyStore
 import one.inbox.data.settings.SettingsStore
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -34,8 +35,10 @@ private class FakeKeyStore(var key: String?) : ApiKeyStore {
 
 private class FakeSummarizer(var result: SummarizeResult) : Summarizer {
     var calls = 0
+    var lastPrompt: String? = null
     override suspend fun summarize(prompt: String, apiKey: String): SummarizeResult {
         calls++
+        lastPrompt = prompt
         return result
     }
 }
@@ -66,6 +69,7 @@ class CatchUpRepositoryTest {
         SettingsStore(PreferenceDataStoreFactory.create(scope = backgroundScope) { File(tmp.root, "t.preferences_pb") }),
         FakeKeyStore(key),
         summarizer,
+        backgroundScope,
     )
 
     private fun msg(dedupe: String, conv: String, pkg: String, ts: Long) =
@@ -122,6 +126,26 @@ class CatchUpRepositoryTest {
         r.markSummaryRead()
         assertEquals(listOf("c"), inbox.unread().map { it.dedupeKey })
         assertEquals(1, r.newSinceCount.first())
+    }
+
+    @Test
+    fun ownRepliesSinceOldestUnreadAreSentButNotCounted() = runTest {
+        seed()
+        inbox.save(
+            listOf(
+                CapturedMessage("wa:alice", "com.whatsapp", "wa:alice", false, "You", true, "on my way", 1500, "me1"),
+                CapturedMessage("wa:alice", "com.whatsapp", "wa:alice", false, "You", true, "old reply", 500, "me0"),
+            ),
+        )
+        val s = FakeSummarizer(SummarizeResult.Json(REPLY_JSON))
+        val outcome = repo("k", s).run()
+        assertTrue(outcome is CatchUpOutcome.Done)
+        val prompt = s.lastPrompt!!
+        assertTrue(prompt, prompt.contains("You: on my way"))
+        assertFalse(prompt, prompt.contains("old reply"))
+        val stored = (outcome as CatchUpOutcome.Done).stored
+        assertEquals(2, stored.unreadCount)
+        assertEquals(inbox.unread().map { it.id }.sorted(), stored.includedIds.sorted())
     }
 
     @Test

@@ -161,6 +161,16 @@ class NotificationParserTest {
     }
 
     @Test
+    fun zeroTimestampRepostWithNewPostTimeKeepsDedupeKeys() {
+        val msgs = listOf(SnapshotMessage("A", "x", 0L), SnapshotMessage("A", "y", -1L))
+        val a = NotificationParser.parse(snapshot(postTime = 1_000L, messages = msgs), allowed)
+        val b = NotificationParser.parse(snapshot(postTime = 2_000L, messages = msgs), allowed)
+        assertEquals(a.map { it.dedupeKey }, b.map { it.dedupeKey })
+        assertNotEquals(a[0].dedupeKey, a[1].dedupeKey)
+        assertEquals(2_000L, b[0].timestamp)
+    }
+
+    @Test
     fun titleFallsBackToDisplayNameThenPackage() {
         val noTitle = snapshot(title = null, text = "hi")
         assertEquals("WhatsApp", NotificationParser.parse(noTitle, allowed)[0].conversationTitle)
