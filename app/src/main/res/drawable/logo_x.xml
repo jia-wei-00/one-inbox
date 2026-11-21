@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glyph: Simple Icons (CC0) "x". See NOTICE.md. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path android:pathData="M11,0.75 H37 A10.25,10.25 0 0 1 47.25,11 V37 A10.25,10.25 0 0 1 37,47.25 H11 A10.25,10.25 0 0 1 0.75,37 V11 A10.25,10.25 0 0 1 11,0.75 Z" android:fillColor="#000000" android:strokeColor="#3A3742" android:strokeWidth="1.5" />
+    <group android:translateX="9.6" android:translateY="9.6" android:scaleX="1.2" android:scaleY="1.2">
+        <path android:pathData="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016 -9.318L16.749 24h6.993zm-2.837 3.299 -.929 -1.329L3.076 1.56h3.182l5.965 8.532 .929 1.329 7.754 11.09h-3.182z" android:fillColor="#FFFFFF" />
+    </group>
+</vector>

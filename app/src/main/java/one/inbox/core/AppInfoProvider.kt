@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.util.LruCache
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.app.NotificationManagerCompat
@@ -33,15 +34,20 @@ interface AppInfoProvider {
 @Singleton
 class PackageAppInfoProvider(
     private val context: Context,
+    private val loadBrandLogo: (Int) -> Drawable? = { id -> ContextCompat.getDrawable(context, id) },
     private val loadIcon: (String) -> Drawable?,
 ) : AppInfoProvider {
-    @Inject constructor(@ApplicationContext context: Context) : this(context, { pkg ->
-        try {
-            context.packageManager.getApplicationIcon(pkg)
-        } catch (_: PackageManager.NameNotFoundException) {
-            null
-        }
-    })
+    @Inject constructor(@ApplicationContext context: Context) : this(
+        context,
+        { id -> ContextCompat.getDrawable(context, id) },
+        { pkg ->
+            try {
+                context.packageManager.getApplicationIcon(pkg)
+            } catch (_: PackageManager.NameNotFoundException) {
+                null
+            }
+        },
+    )
 
     override fun label(pkg: String): String {
         ChatApps.displayName(pkg)?.let { return it }
@@ -67,7 +73,9 @@ class PackageAppInfoProvider(
 
     override fun icon(pkg: String): ImageBitmap? {
         icons.get(pkg)?.let { return it.bitmap }
-        val bitmap = loadIcon(pkg)?.toBitmap(iconSizePx, iconSizePx)?.asImageBitmap()
+        // A bundled logo (the default chat apps) wins over the installed icon.
+        val drawable = BrandLogos.forPackage(pkg)?.let(loadBrandLogo) ?: loadIcon(pkg)
+        val bitmap = drawable?.toBitmap(iconSizePx, iconSizePx)?.asImageBitmap()
         icons.put(pkg, CachedIcon(bitmap))
         return bitmap
     }

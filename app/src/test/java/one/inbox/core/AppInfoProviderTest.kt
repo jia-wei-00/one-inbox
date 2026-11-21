@@ -20,7 +20,7 @@ class AppInfoProviderTest {
     private val context: Context = RuntimeEnvironment.getApplication()
     private val loads = mutableListOf<String>()
 
-    private fun provider() = PackageAppInfoProvider(context) { pkg ->
+    private fun provider() = PackageAppInfoProvider(context, loadBrandLogo = { null }) { pkg ->
         loads += pkg
         if (pkg == "com.whatsapp") BitmapDrawable(context.resources, Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)) else null
     }
@@ -35,6 +35,29 @@ class AppInfoProviderTest {
         assertNull(provider.icon("com.missing"))
         assertNull(provider.icon("com.missing"))
         assertEquals(listOf("com.whatsapp", "com.missing"), loads)
+    }
+
+    @Test
+    fun bundledLogoIsCachedAndBeatsInstalledIcon() {
+        val installed = mutableListOf<String>()
+        var brandLoads = 0
+        val provider = PackageAppInfoProvider(
+            context,
+            loadBrandLogo = { _ ->
+                brandLoads++
+                BitmapDrawable(context.resources, Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888))
+            },
+            loadIcon = { pkg -> installed += pkg; null },
+        )
+        val first = provider.icon("com.whatsapp")
+        assertNotNull(first)
+        assertSame(first, provider.icon("com.whatsapp"))
+        assertEquals(1, brandLoads)
+        assertEquals(emptyList<String>(), installed)
+
+        provider.icon("com.example.other")
+        assertEquals(listOf("com.example.other"), installed)
+        assertEquals(1, brandLoads)
     }
 
     @Test
