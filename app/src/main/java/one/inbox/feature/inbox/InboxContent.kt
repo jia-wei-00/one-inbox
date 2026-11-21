@@ -114,15 +114,22 @@ fun InboxContent(
     motionEnabled: Boolean = true,
 ) {
     // App icons are decoded from the PackageManager; keep them for the life of the screen.
-    val icons = remember { HashMap<String, ImageBitmap?>() }
-    val iconOf: (String) -> ImageBitmap? = { pkg -> if (pkg in icons) icons[pkg] else icon(pkg).also { icons[pkg] = it } }
+    val iconOf: (String) -> ImageBitmap? = remember(icon) {
+        val cache = HashMap<String, ImageBitmap?>()
+        val cached: (String) -> ImageBitmap? = { pkg ->
+            if (pkg in cache) cache[pkg] else icon(pkg).also { cache[pkg] = it }
+        }
+        cached
+    }
 
     val listState = rememberLazyListState()
-    var fabExpanded by remember { mutableStateOf(true) }
+    var collapsedByScroll by remember { mutableStateOf(false) }
     val fabScroll = remember {
         object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y < -1f) fabExpanded = false else if (available.y > 1f) fabExpanded = true
+            // Decide from what the list actually consumed: a drag on a list that can't scroll
+            // (e.g. two conversations) consumes nothing and leaves the FAB alone.
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (consumed.y < -1f) collapsedByScroll = true else if (consumed.y > 1f) collapsedByScroll = false
                 return Offset.Zero
             }
         }
@@ -130,7 +137,9 @@ fun InboxContent(
     val atTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
     }
-    LaunchedEffect(atTop) { if (atTop) fabExpanded = true }
+    // Always expanded at the top of the list, and whenever the list doesn't scroll at all.
+    val fabExpanded = !collapsedByScroll || atTop || !listState.canScrollForward && !listState.canScrollBackward
+    LaunchedEffect(atTop) { if (atTop) collapsedByScroll = false }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,

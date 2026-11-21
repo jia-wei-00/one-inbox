@@ -49,10 +49,17 @@ class InboxScreenshotTest {
     fun inbox_railOpen() = capture("inbox_railOpen", baseState())
 
     @Test
-    fun inbox_railHidden() = capture(
-        "inbox_railHidden",
-        baseState().copy(sidebarOpen = false, selected = WHATSAPP),
-    )
+    fun inbox_railHidden() {
+        val base = baseState()
+        capture(
+            "inbox_railHidden",
+            base.copy(
+                sidebarOpen = false,
+                selected = WHATSAPP,
+                conversations = base.conversations.filter { it.packageName == WHATSAPP },
+            ),
+        )
+    }
 
     @Test
     fun inbox_health() = capture("inbox_health", baseState().copy(health = CaptureHealth.NoAccess))
@@ -158,6 +165,20 @@ class InboxScreenshotTest {
         compose.onNodeWithText(fabText, useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Catch up, 7 unread").assertExists()
         compose.onNodeWithTag("inbox-list").performTouchInput { swipeDown(startY = centerY, endY = centerY + 200f) }
+        compose.onNodeWithText(fabText, useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun fabStaysExpandedWhenShortListIsDragged() {
+        val base = baseState()
+        compose.setContent {
+            OneInboxTheme(darkTheme = true) { Content(base.copy(conversations = base.conversations.take(3))) }
+        }
+        val fabText = "Catch up · 7"
+        compose.onNodeWithTag("inbox-list").performTouchInput { swipeUp() }
+        compose.onNodeWithText(fabText, useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("inbox-list").performTouchInput { swipeDown() }
+        compose.onNodeWithTag("inbox-list").performTouchInput { swipeUp() }
         compose.onNodeWithText(fabText, useUnmergedTree = true).assertExists()
     }
 

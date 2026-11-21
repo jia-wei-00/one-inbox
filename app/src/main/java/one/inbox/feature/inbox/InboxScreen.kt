@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -50,10 +51,12 @@ fun InboxScreen(
         }
     }
     val icon = remember(viewModel) { { pkg: String -> viewModel.icon(pkg) } }
+    val rail by rememberUpdatedState(state.rail)
+    val label = remember { { pkg: String -> rail.firstOrNull { it.packageName == pkg }?.label ?: pkg } }
     InboxContent(
         state = state,
         icon = icon,
-        label = { pkg -> state.rail.firstOrNull { it.packageName == pkg }?.label ?: pkg },
+        label = label,
         onSelect = viewModel::select,
         onToggleSidebar = viewModel::toggleSidebar,
         onOpenConversation = onOpenConversation,

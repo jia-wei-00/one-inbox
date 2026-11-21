@@ -2,7 +2,10 @@ package one.inbox.feature.inbox
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,7 +35,11 @@ fun AppRail(
 ) {
     LazyColumn(
         modifier.width(RailWidth).fillMaxHeight(),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
+        // Edge-to-edge (Android 15+): the last tile must scroll clear of the navigation bar.
+        contentPadding = PaddingValues(
+            top = 12.dp,
+            bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        ),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

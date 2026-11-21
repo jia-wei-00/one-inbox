@@ -43,7 +43,7 @@ private val BarInset = 10.dp
 private val BadgeRing = 2.dp
 
 /**
- * A rounded-square app tile: the app icon, or [glyph] (by default the label's first letter) on
+ * A rounded-square app tile: the app icon, or [glyph] (when null, the label's first letter) on
  * `surfaceContainerHighest`.
  *
  * The layout bounds are the tile itself (at least 48dp for touch). The selection outline (2dp
@@ -58,9 +58,9 @@ fun AppTile(
     selected: Boolean,
     unread: Int,
     onClick: () -> Unit,
-    size: Dp = 48.dp,
     modifier: Modifier = Modifier,
-    glyph: String = initialsOf(label),
+    size: Dp = 48.dp,
+    glyph: String? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val scale = size / ReferenceSize
@@ -111,7 +111,7 @@ fun AppTile(
                 )
             } else {
                 Text(
-                    glyph,
+                    glyph ?: initialsOf(label),
                     color = colors.onSurface,
                     fontSize = letterSize,
                     fontWeight = FontWeight.Bold,
