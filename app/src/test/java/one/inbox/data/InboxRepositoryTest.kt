@@ -9,6 +9,8 @@ import one.inbox.capture.CapturedMessage
 import one.inbox.data.db.AppDatabase
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -142,5 +144,92 @@ class InboxRepositoryTest {
         assertEquals("You: ok", previewFor(true, "You", true, "ok"))
         assertEquals("hi", previewFor(false, "Jason", false, "hi"))
         assertEquals("You: see you", previewFor(false, "You", true, "see you"))
+    }
+
+    @Test
+    fun deletedConversationIsGoneAndOldNotificationsDontBringItBack() = runTest {
+        repo.save(listOf(msg("a"), msg("b", ts = 2000)))
+        assertNotNull(repo.deleteConversation("wa:alice"))
+        assertTrue(repo.conversations(null).first().isEmpty())
+        assertTrue(repo.messages("wa:alice").first().isEmpty())
+        assertTrue(repo.apps().first().isEmpty())
+        // The chat app re-posts the same history in its next notification update.
+        repo.save(listOf(msg("a"), msg("b", ts = 2000)))
+        assertTrue(repo.conversations(null).first().isEmpty())
+        assertTrue(repo.unread().isEmpty())
+    }
+
+    @Test
+    fun newMessageInDeletedChatBringsBackOnlyTheNewMessage() = runTest {
+        repo.save(listOf(msg("a", text = "old")))
+        repo.deleteConversation("wa:alice")
+        repo.save(listOf(msg("a", text = "old"), msg("c", text = "new", ts = 3000)))
+        assertEquals(listOf("new"), repo.messages("wa:alice").first().map { it.text })
+        assertEquals("new", repo.conversation("wa:alice").first()!!.preview)
+    }
+
+    @Test
+    fun deletedMessagesCountAsKnownForCaptureHealth() = runTest {
+        repo.save(listOf(msg("a")))
+        repo.deleteConversation("wa:alice")
+        assertEquals(setOf("a"), repo.knownDedupeKeys(listOf("a", "z")))
+    }
+
+    @Test
+    fun deletingAnUnknownConversationReturnsNull() = runTest {
+        assertNull(repo.deleteConversation("wa:nobody"))
+    }
+
+    @Test
+    fun undoRestoresTheConversationExactly() = runTest {
+        repo.save(listOf(msg("a", text = "one"), msg("b", text = "two", ts = 2000)))
+        repo.markRead(repo.unread().take(1).map { it.id })
+        val before = repo.messages("wa:alice").first()
+        val conversationBefore = repo.conversation("wa:alice").first()
+        val deleted = repo.deleteConversation("wa:alice")!!
+        repo.restore(deleted)
+        assertEquals(before, repo.messages("wa:alice").first())
+        assertEquals(conversationBefore, repo.conversation("wa:alice").first())
+        // Restored messages are captured normally again: no duplicates on the next notification.
+        repo.save(listOf(msg("a", text = "one"), msg("b", text = "two", ts = 2000)))
+        assertEquals(2, repo.messages("wa:alice").first().size)
+    }
+
+    @Test
+    fun undoAfterTheChatCameBackKeepsTheNewestPreview() = runTest {
+        repo.save(listOf(msg("a", text = "old")))
+        val deleted = repo.deleteConversation("wa:alice")!!
+        repo.save(listOf(msg("c", text = "newer", ts = 3000)))
+        repo.restore(deleted)
+        assertEquals(listOf("old", "newer"), repo.messages("wa:alice").first().map { it.text })
+        assertEquals("newer", repo.conversation("wa:alice").first()!!.preview)
+    }
+
+    @Test
+    fun deleteReadConversationsKeepsUnreadChats() = runTest {
+        repo.save(
+            listOf(
+                msg("r-old", conv = "wa:old", ts = 1000),
+                msg("r-new", conv = "wa:new", ts = 9000),
+                msg("u-old", conv = "wa:unread", ts = 1000),
+                msg("mine", conv = "wa:mine", fromMe = true, ts = 1000),
+            ),
+        )
+        repo.markConversationRead("wa:old")
+        repo.markConversationRead("wa:new")
+        assertEquals(3, repo.readConversationCount().first())
+
+        assertEquals(2, repo.deleteReadConversations(before = 5000))
+        assertEquals(
+            setOf("wa:new", "wa:unread"),
+            repo.conversations(null).first().map { it.key }.toSet(),
+        )
+
+        assertEquals(1, repo.deleteReadConversations())
+        assertEquals(listOf("wa:unread"), repo.conversations(null).first().map { it.key })
+        assertEquals(0, repo.readConversationCount().first())
+        // Bulk-deleted chats stay deleted too.
+        repo.save(listOf(msg("r-old", conv = "wa:old", ts = 1000)))
+        assertEquals(listOf("wa:unread"), repo.conversations(null).first().map { it.key })
     }
 }

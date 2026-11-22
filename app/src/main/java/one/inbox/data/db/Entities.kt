@@ -30,6 +30,13 @@ data class MessageEntity(
     val unread: Boolean,
 )
 
+/** A deleted message's dedupe key, so the chat app's next notification can't capture it again. */
+@Entity(tableName = "deleted_messages")
+data class DeletedMessageEntity(
+    @PrimaryKey val dedupeKey: String,
+    val deletedAt: Long,
+)
+
 data class AppSummary(val packageName: String, val unreadCount: Int, val lastMessageAt: Long)
 
 data class ConversationRow(
