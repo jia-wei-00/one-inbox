@@ -74,4 +74,12 @@ class SettingsStoreTest {
         s.setSidebarOpen(false)
         assertFalse(s.sidebarOpen.first())
     }
+
+    @Test
+    fun autoDeleteDefaultsOffAndPersists() = runTest {
+        val s = store()
+        assertEquals(0, s.autoDeleteDays.first())
+        s.setAutoDeleteDays(30)
+        assertEquals(30, s.autoDeleteDays.first())
+    }
 }

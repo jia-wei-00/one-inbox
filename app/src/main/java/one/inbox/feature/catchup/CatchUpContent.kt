@@ -430,7 +430,8 @@ private fun ItemRow(
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(14.dp))
-            .clickable { onOpen(item.conversationKey) }
+            // A chat deleted since the summary has nothing to open.
+            .clickable(enabled = label?.title != null || label == null) { onOpen(item.conversationKey) }
             .padding(vertical = 7.dp),
         verticalAlignment = Alignment.Top,
     ) {

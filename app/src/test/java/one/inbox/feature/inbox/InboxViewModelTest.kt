@@ -15,11 +15,13 @@ import kotlinx.coroutines.test.setMain
 import one.inbox.capture.CapturedMessage
 import one.inbox.core.AccessChecker
 import one.inbox.core.AppInfoProvider
+import one.inbox.data.InboxCleaner
 import one.inbox.data.InboxRepository
 import one.inbox.data.db.AppDatabase
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -64,8 +66,10 @@ class InboxViewModelTest {
         settings = SettingsStore(
             PreferenceDataStoreFactory.create(scope = CoroutineScope(UnconfinedTestDispatcher())) { File(tmp.root, "t.preferences_pb") },
         )
-        vm = InboxViewModel(repo, appInfo, access, settings)
+        vm = newVm()
     }
+
+    private fun newVm() = InboxViewModel(repo, appInfo, access, settings, InboxCleaner(repo, settings))
 
     @After
     fun tearDown() {
@@ -124,5 +128,74 @@ class InboxViewModelTest {
         assertFalse(vm.state.value.loaded)
         val firstReal = vm.state.drop(1).first()
         assertTrue(firstReal.loaded)
+    }
+
+    @Test
+    fun deleteRemovesTheChatAndUndoBringsItBack() = runTest {
+        seed()
+        vm.state.first { it.conversations.size == 2 }
+        vm.delete("wa:alice")
+        val deleted = vm.state.first { it.conversations.size == 1 && it.deleted != null }
+        assertEquals("Alice", deleted.deleted!!.conversation.title)
+        assertEquals(1, deleted.totalUnread)
+        vm.undoDelete(deleted.deleted!!)
+        val restored = vm.state.first { it.conversations.size == 2 && it.deleted == null }
+        assertEquals(3, restored.totalUnread)
+    }
+
+    @Test
+    fun dismissingTheUndoKeepsTheChatDeleted() = runTest {
+        seed()
+        vm.delete("wa:alice")
+        val alice = vm.state.first { it.deleted != null }.deleted!!
+        vm.dismissUndo(alice)
+        val state = vm.state.first { it.deleted == null }
+        assertEquals(listOf("tg:bob"), state.conversations.map { it.key })
+        vm.undoDelete(alice)
+        assertEquals(1, repo.conversations(null).first().size)
+    }
+
+    @Test
+    fun aStaleUndoDoesNotTouchTheNewerDelete() = runTest {
+        seed()
+        vm.delete("wa:alice")
+        val alice = vm.state.first { it.deleted?.conversation?.key == "wa:alice" }.deleted!!
+        vm.delete("tg:bob")
+        val bob = vm.state.first { it.deleted?.conversation?.key == "tg:bob" }.deleted!!
+        // Alice's snackbar was replaced: answering it late changes nothing.
+        vm.undoDelete(alice)
+        vm.dismissUndo(alice)
+        assertEquals(bob, vm.state.value.deleted)
+        assertTrue(repo.conversations(null).first().isEmpty())
+        vm.undoDelete(bob)
+        assertEquals(listOf("tg:bob"), vm.state.first { it.conversations.size == 1 }.conversations.map { it.key })
+    }
+
+    @Test
+    fun autoCleanAppliesTheAutoDeleteSetting() = runTest {
+        val old = System.currentTimeMillis() - 40L * 24 * 60 * 60 * 1000
+        repo.save(listOf(msg("o", "wa:old", "com.whatsapp", "Old", old), msg("n", "tg:new", "org.telegram.messenger", "New", old)))
+        repo.markConversationRead("wa:old")
+        settings.setAutoDeleteDays(30)
+        val fresh = newVm()
+        fresh.autoClean()
+        val state = fresh.state.first { it.conversations.size == 1 }
+        assertEquals("New", state.conversations.single().title)
+        assertNull(state.deleted)
+    }
+
+    @Test
+    fun autoCleanRunsAtMostEverySixHours() = runTest {
+        val old = System.currentTimeMillis() - 40L * 24 * 60 * 60 * 1000
+        settings.setAutoDeleteDays(30)
+        val now = System.currentTimeMillis()
+        vm.autoClean(now)
+        // An old chat read just now (e.g. opened from the inbox) survives going back to the inbox.
+        repo.save(listOf(msg("o", "wa:old", "com.whatsapp", "Old", old)))
+        repo.markConversationRead("wa:old")
+        vm.autoClean(now + 60_000)
+        assertEquals(listOf("wa:old"), vm.state.first { it.conversations.isNotEmpty() }.conversations.map { it.key })
+        vm.autoClean(now + 7L * 60 * 60 * 1000)
+        vm.state.first { it.conversations.isEmpty() }
     }
 }

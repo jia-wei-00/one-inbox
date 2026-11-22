@@ -10,6 +10,18 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -75,6 +87,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import one.inbox.capture.CaptureHealth
+import one.inbox.data.DeletedConversation
 import one.inbox.data.db.ConversationRow
 import one.inbox.ui.components.Avatar
 import one.inbox.ui.components.CountPill
@@ -115,6 +128,9 @@ fun InboxContent(
     onSettings: () -> Unit,
     onFixHealth: () -> Unit,
     motionEnabled: Boolean = true,
+    onDelete: (String) -> Unit = {},
+    onUndoDelete: (DeletedConversation) -> Unit = {},
+    onUndoDismissed: (DeletedConversation) -> Unit = {},
 ) {
     // App icons are cached app-wide, per package and at display size, by AppInfoProvider.
     val iconOf = icon
@@ -138,6 +154,26 @@ fun InboxContent(
     val fabExpanded = !collapsedByScroll || atTop || !listState.canScrollForward && !listState.canScrollBackward
     LaunchedEffect(atTop) { if (atTop) collapsedByScroll = false }
 
+    // One Undo at a time: a newer delete replaces (and dismisses) the previous snackbar.
+    val snackbars = remember { SnackbarHostState() }
+    val deleted = state.deleted
+    LaunchedEffect(deleted) {
+        if (deleted == null) return@LaunchedEffect
+        var answered = false
+        try {
+            val result = snackbars.showSnackbar(
+                message = "Deleted ${deleted.conversation.title}",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short,
+            )
+            answered = true
+            if (result == SnackbarResult.ActionPerformed) onUndoDelete(deleted) else onUndoDismissed(deleted)
+        } finally {
+            // Leaving the inbox ends the offer, so it doesn't pop up again later.
+            if (!answered) onUndoDismissed(deleted)
+        }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0),
@@ -151,6 +187,7 @@ fun InboxContent(
                 motionEnabled = motionEnabled,
             )
         },
+        snackbarHost = { SnackbarHost(snackbars, Modifier.navigationBarsPadding()) },
         floatingActionButton = {
             CatchUpFab(if (state.loaded) state.totalUnread else 0, fabExpanded, onCatchUp, Modifier.navigationBarsPadding())
         },
@@ -159,7 +196,7 @@ fun InboxContent(
             // Recreated once when the first real state arrives, so the rail and sheet corner start at
             // the stored value instead of animating away from the default; later toggles animate.
             key(state.loaded) {
-                RailAndSheet(state, listState, iconOf, fabScroll, onSelect, onOpenConversation, onFixHealth, motionEnabled)
+                RailAndSheet(state, listState, iconOf, fabScroll, onSelect, onOpenConversation, onFixHealth, onDelete, motionEnabled)
             }
         }
     }
@@ -174,6 +211,7 @@ private fun RowScope.RailAndSheet(
     onSelect: (String?) -> Unit,
     onOpenConversation: (String) -> Unit,
     onFixHealth: () -> Unit,
+    onDelete: (String) -> Unit,
     motionEnabled: Boolean,
 ) {
     val railOpen = state.loaded && state.sidebarOpen
@@ -198,7 +236,7 @@ private fun RowScope.RailAndSheet(
         shape = RoundedCornerShape(topStart = SheetCorner, topEnd = topEnd.coerceAtLeast(0.dp)),
         color = MaterialTheme.colorScheme.surface,
     ) {
-        InboxList(state, listState, iconOf, onOpenConversation, onFixHealth)
+        InboxList(state, listState, iconOf, onOpenConversation, onFixHealth, onDelete)
     }
 }
 
@@ -327,6 +365,7 @@ private fun InboxList(
     iconOf: (String) -> ImageBitmap?,
     onOpenConversation: (String) -> Unit,
     onFixHealth: () -> Unit,
+    onDelete: (String) -> Unit,
 ) {
     // Nothing is known yet: an empty sheet rather than a fake "No messages yet".
     if (!state.loaded) return
@@ -351,18 +390,59 @@ private fun InboxList(
             }
         }
         items(state.conversations, key = { it.key }) { row ->
-            ConversationListItem(row, iconOf(row.packageName)) { onOpenConversation(row.key) }
+            SwipeToDelete(onDelete = { onDelete(row.key) }) {
+                ConversationListItem(row, iconOf(row.packageName), onDelete = { onDelete(row.key) }) {
+                    onOpenConversation(row.key)
+                }
+            }
         }
     }
 }
 
+/** Swiping a row either way deletes the chat; the red background shows behind the moving row. */
 @Composable
-private fun ConversationListItem(row: ConversationRow, appIcon: ImageBitmap?, onClick: () -> Unit) {
+private fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
+    // Deliberately not rememberSwipeToDismissBoxState (saveable): the list keeps a removed row's saved
+    // state under its key, so a chat brought back by Undo or a new message would return already
+    // dismissed and delete itself again.
+    val swipe = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, positionalThreshold = { it * 0.5f }) }
+    SwipeToDismissBox(
+        state = swipe,
+        backgroundContent = {
+            val colors = MaterialTheme.colorScheme
+            val fromStart = swipe.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            Row(
+                Modifier.fillMaxSize().background(colors.errorContainer).padding(horizontal = 24.dp),
+                horizontalArrangement = if (fromStart) Arrangement.Start else Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.Delete, contentDescription = null, tint = colors.onErrorContainer)
+            }
+        },
+        onDismiss = { onDelete() },
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun ConversationListItem(
+    row: ConversationRow,
+    appIcon: ImageBitmap?,
+    onDelete: () -> Unit,
+    onClick: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     val unread = row.unreadCount > 0
     Row(
         Modifier
             .fillMaxWidth()
+            // Opaque, so the swipe background only shows where the row has moved away.
+            .background(colors.surface)
+            // Swiping isn't reachable with TalkBack; the same delete is offered as an action.
+            .semantics {
+                customActions = listOf(CustomAccessibilityAction("Delete chat") { onDelete(); true })
+            }
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

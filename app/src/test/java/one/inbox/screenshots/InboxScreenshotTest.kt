@@ -9,6 +9,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
+import one.inbox.data.DeletedConversation
+import one.inbox.data.db.ConversationEntity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
@@ -201,6 +209,68 @@ class InboxScreenshotTest {
         compose.onNodeWithText(fabText, useUnmergedTree = true).assertExists()
     }
 
+    @Test
+    fun swipingARowEitherWayDeletesIt() {
+        val deleted = mutableListOf<String>()
+        compose.setContent {
+            OneInboxTheme(darkTheme = true) { Content(baseState(), onDelete = { deleted += it }) }
+        }
+        compose.onNodeWithText("Mom").performTouchInput { swipeLeft() }
+        compose.onNodeWithText("Alex Tan").performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        assertEquals(listOf("wa:mom", "ms:alex"), deleted)
+    }
+
+    @Test
+    fun aSwipedChatThatComesBackIsNotDeletedAgain() {
+        val deleted = mutableListOf<String>()
+        var state by mutableStateOf(baseState())
+        compose.setContent {
+            OneInboxTheme(darkTheme = true) {
+                Content(state, onDelete = { key ->
+                    deleted += key
+                    state = state.copy(conversations = state.conversations.filterNot { it.key == key })
+                })
+            }
+        }
+        compose.onNodeWithText("Mom").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Mom").assertDoesNotExist()
+        // Undo (or a new message) brings the same chat back.
+        state = baseState()
+        compose.waitForIdle()
+        compose.onNodeWithText("Mom").assertIsDisplayed()
+        assertEquals(listOf("wa:mom"), deleted)
+    }
+
+    @Test
+    fun deleteIsOfferedAsAnAccessibilityAction() {
+        val deleted = mutableListOf<String>()
+        compose.setContent {
+            OneInboxTheme(darkTheme = true) { Content(baseState(), onDelete = { deleted += it }) }
+        }
+        val node = compose.onNodeWithText("Mom").fetchSemanticsNode()
+        val action = node.config[SemanticsActions.CustomActions].single { it.label == "Delete chat" }
+        compose.runOnUiThread { action.action() }
+        assertEquals(listOf("wa:mom"), deleted)
+    }
+
+    @Test
+    fun deletedChatShowsUndo() {
+        var undone = 0
+        val chat = DeletedConversation(ConversationEntity("wa:mom", WHATSAPP, "Mom", false, 0, "hi"), emptyList())
+        compose.setContent {
+            OneInboxTheme(darkTheme = true) {
+                Content(baseState().copy(deleted = chat), onUndoDelete = { undone++ })
+            }
+        }
+        compose.onNodeWithText("Deleted Mom").assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/inbox_undo.png")
+        compose.onNodeWithText("Undo").performClick()
+        compose.waitForIdle()
+        assertEquals(1, undone)
+    }
+
     private fun capture(name: String, state: InboxUiState, fontScale: Float = 1f) {
         compose.setContent {
             val density = LocalDensity.current
@@ -216,6 +286,9 @@ class InboxScreenshotTest {
         state: InboxUiState,
         onToggleSidebar: () -> Unit = {},
         onCatchUp: () -> Unit = {},
+        onDelete: (String) -> Unit = {},
+        onUndoDelete: (DeletedConversation) -> Unit = {},
+        onUndoDismissed: (DeletedConversation) -> Unit = {},
     ) {
         InboxContent(
             state = state,
@@ -228,6 +301,9 @@ class InboxScreenshotTest {
             onSettings = {},
             onFixHealth = {},
             motionEnabled = false,
+            onDelete = onDelete,
+            onUndoDelete = onUndoDelete,
+            onUndoDismissed = onUndoDismissed,
         )
     }
 

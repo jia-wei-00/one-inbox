@@ -44,6 +44,7 @@ fun InboxScreen(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.autoClean()
             while (true) {
                 viewModel.refreshHealth()
                 delay(HEALTH_INTERVAL_MS)
@@ -72,5 +73,8 @@ fun InboxScreen(
             }
         },
         motionEnabled = rememberMotionEnabled(),
+        onDelete = viewModel::delete,
+        onUndoDelete = viewModel::undoDelete,
+        onUndoDismissed = viewModel::dismissUndo,
     )
 }
