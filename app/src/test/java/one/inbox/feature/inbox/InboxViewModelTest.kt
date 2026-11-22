@@ -15,11 +15,13 @@ import kotlinx.coroutines.test.setMain
 import one.inbox.capture.CapturedMessage
 import one.inbox.core.AccessChecker
 import one.inbox.core.AppInfoProvider
+import one.inbox.data.InboxCleaner
 import one.inbox.data.InboxRepository
 import one.inbox.data.db.AppDatabase
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -64,8 +66,10 @@ class InboxViewModelTest {
         settings = SettingsStore(
             PreferenceDataStoreFactory.create(scope = CoroutineScope(UnconfinedTestDispatcher())) { File(tmp.root, "t.preferences_pb") },
         )
-        vm = InboxViewModel(repo, appInfo, access, settings)
+        vm = newVm()
     }
+
+    private fun newVm() = InboxViewModel(repo, appInfo, access, settings, InboxCleaner(repo, settings))
 
     @After
     fun tearDown() {
@@ -124,5 +128,42 @@ class InboxViewModelTest {
         assertFalse(vm.state.value.loaded)
         val firstReal = vm.state.drop(1).first()
         assertTrue(firstReal.loaded)
+    }
+
+    @Test
+    fun deleteRemovesTheChatAndUndoBringsItBack() = runTest {
+        seed()
+        vm.state.first { it.conversations.size == 2 }
+        vm.delete("wa:alice")
+        val deleted = vm.state.first { it.conversations.size == 1 && it.deleted != null }
+        assertEquals("Alice", deleted.deleted!!.conversation.title)
+        assertEquals(1, deleted.totalUnread)
+        vm.undoDelete()
+        val restored = vm.state.first { it.conversations.size == 2 && it.deleted == null }
+        assertEquals(3, restored.totalUnread)
+    }
+
+    @Test
+    fun dismissingTheUndoKeepsTheChatDeleted() = runTest {
+        seed()
+        vm.delete("wa:alice")
+        vm.state.first { it.deleted != null }
+        vm.dismissUndo()
+        val state = vm.state.first { it.deleted == null }
+        assertEquals(listOf("tg:bob"), state.conversations.map { it.key })
+        vm.undoDelete()
+        assertEquals(1, repo.conversations(null).first().size)
+    }
+
+    @Test
+    fun openingTheInboxAppliesAutoDelete() = runTest {
+        val old = System.currentTimeMillis() - 40L * 24 * 60 * 60 * 1000
+        repo.save(listOf(msg("o", "wa:old", "com.whatsapp", "Old", old), msg("n", "tg:new", "org.telegram.messenger", "New", old)))
+        repo.markConversationRead("wa:old")
+        settings.setAutoDeleteDays(30)
+        val fresh = newVm()
+        val state = fresh.state.first { it.conversations.size == 1 }
+        assertEquals("New", state.conversations.single().title)
+        assertNull(state.deleted)
     }
 }

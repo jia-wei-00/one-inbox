@@ -19,6 +19,8 @@ import one.inbox.capture.ListenerState
 import one.inbox.capture.evaluateHealth
 import one.inbox.core.AccessChecker
 import one.inbox.core.AppInfoProvider
+import one.inbox.data.DeletedConversation
+import one.inbox.data.InboxCleaner
 import one.inbox.data.InboxRepository
 import one.inbox.data.db.ConversationRow
 import one.inbox.data.settings.SettingsStore
@@ -37,6 +39,8 @@ data class InboxUiState(
     val appsWithUnread: Int = 0,
     /** False until the repository and settings have emitted once; until then nothing real is known. */
     val loaded: Boolean = false,
+    /** The chat just swiped away, while its Undo is offered. */
+    val deleted: DeletedConversation? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -46,9 +50,15 @@ class InboxViewModel @Inject constructor(
     private val appInfo: AppInfoProvider,
     private val access: AccessChecker,
     private val settings: SettingsStore,
+    cleaner: InboxCleaner,
 ) : ViewModel() {
     private val selected = MutableStateFlow<String?>(null)
     private val healthTick = MutableStateFlow(0)
+    private val deleted = MutableStateFlow<DeletedConversation?>(null)
+
+    init {
+        viewModelScope.launch { cleaner.autoClean() }
+    }
 
     private val rail = repo.apps().map { list ->
         list.map { RailApp(it.packageName, appInfo.label(it.packageName), it.unreadCount) }
@@ -70,9 +80,11 @@ class InboxViewModel @Inject constructor(
     val state: StateFlow<InboxUiState> = combine(
         combine(rail, selected, conversations, health) { r, s, c, h -> InboxUiState(r, s, c, h) },
         settings.sidebarOpen,
-    ) { base, open ->
+        deleted,
+    ) { base, open, justDeleted ->
         base.copy(
             sidebarOpen = open,
+            deleted = justDeleted,
             totalUnread = base.rail.sumOf { it.unreadCount },
             appsWithUnread = base.rail.count { it.unreadCount > 0 },
             loaded = true,
@@ -85,6 +97,23 @@ class InboxViewModel @Inject constructor(
 
     fun toggleSidebar() {
         viewModelScope.launch { settings.toggleSidebar() }
+    }
+
+    /** Deletes a chat for good, offering Undo until [undoDelete] or [dismissUndo]. */
+    fun delete(conversationKey: String) {
+        viewModelScope.launch {
+            repo.deleteConversation(conversationKey)?.let { deleted.value = it }
+        }
+    }
+
+    fun undoDelete() {
+        val chat = deleted.value ?: return
+        deleted.value = null
+        viewModelScope.launch { repo.restore(chat) }
+    }
+
+    fun dismissUndo() {
+        deleted.value = null
     }
 
     /** Re-run the capture health check (called on resume and every 15 minutes while visible). */

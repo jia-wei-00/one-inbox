@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,7 @@ class SettingsStore @Inject constructor(private val dataStore: DataStore<Prefere
     private val seenKey = stringSetPreferencesKey("seen_packages")
     private val sidebarKey = booleanPreferencesKey("sidebar_open")
     private val catchUpKey = stringPreferencesKey("last_catch_up_json")
+    private val autoDeleteKey = intPreferencesKey("auto_delete_read_days")
 
     private val defaults get() = ChatApps.defaultAllowlist(BuildConfig.DEBUG)
 
@@ -45,6 +47,13 @@ class SettingsStore @Inject constructor(private val dataStore: DataStore<Prefere
 
     suspend fun toggleSidebar() {
         dataStore.edit { it[sidebarKey] = !(it[sidebarKey] ?: true) }
+    }
+
+    /** Read chats older than this many days are deleted automatically; 0 means never. */
+    val autoDeleteDays: Flow<Int> = dataStore.data.map { it[autoDeleteKey] ?: 0 }
+
+    suspend fun setAutoDeleteDays(days: Int) {
+        dataStore.edit { it[autoDeleteKey] = days }
     }
 
     val lastCatchUpJson: Flow<String?> = dataStore.data.map { it[catchUpKey] }
