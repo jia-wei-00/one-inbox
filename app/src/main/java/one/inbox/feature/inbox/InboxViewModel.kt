@@ -45,6 +45,8 @@ data class InboxUiState(
     val deleted: DeletedConversation? = null,
 )
 
+private const val AUTO_CLEAN_INTERVAL_MS = 6 * 60 * 60 * 1000L
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class InboxViewModel @Inject constructor(
@@ -98,8 +100,15 @@ class InboxViewModel @Inject constructor(
         viewModelScope.launch { settings.toggleSidebar() }
     }
 
-    /** Applies the auto-delete setting; called whenever the inbox comes on screen. */
-    fun autoClean() {
+    private var lastAutoClean = 0L
+
+    /**
+     * Applies the auto-delete setting when the inbox comes on screen, at most every few hours, so an
+     * old chat just opened (and so marked read) doesn't vanish the moment you go back.
+     */
+    fun autoClean(now: Long = System.currentTimeMillis()) {
+        if (lastAutoClean != 0L && now - lastAutoClean < AUTO_CLEAN_INTERVAL_MS) return
+        lastAutoClean = now
         viewModelScope.launch {
             try {
                 cleaner.autoClean()

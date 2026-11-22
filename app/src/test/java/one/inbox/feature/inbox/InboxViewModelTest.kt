@@ -183,4 +183,19 @@ class InboxViewModelTest {
         assertEquals("New", state.conversations.single().title)
         assertNull(state.deleted)
     }
+
+    @Test
+    fun autoCleanRunsAtMostEverySixHours() = runTest {
+        val old = System.currentTimeMillis() - 40L * 24 * 60 * 60 * 1000
+        settings.setAutoDeleteDays(30)
+        val now = System.currentTimeMillis()
+        vm.autoClean(now)
+        // An old chat read just now (e.g. opened from the inbox) survives going back to the inbox.
+        repo.save(listOf(msg("o", "wa:old", "com.whatsapp", "Old", old)))
+        repo.markConversationRead("wa:old")
+        vm.autoClean(now + 60_000)
+        assertEquals(listOf("wa:old"), vm.state.first { it.conversations.isNotEmpty() }.conversations.map { it.key })
+        vm.autoClean(now + 7L * 60 * 60 * 1000)
+        vm.state.first { it.conversations.isEmpty() }
+    }
 }
