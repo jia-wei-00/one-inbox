@@ -21,6 +21,15 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.semantics.role
+import one.inbox.data.AUTO_DELETE_CHOICES
+import one.inbox.ui.components.OneInboxTonalButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -61,8 +70,8 @@ import one.inbox.ui.theme.doneGreen
 import one.inbox.ui.theme.OneInboxTheme
 
 /**
- * Settings in three cards: the Claude API key (masked; the saved key is never shown), which apps
- * to capture, and re-running setup.
+ * Settings in four cards: the Claude API key (masked; the saved key is never shown), which apps
+ * to capture, inbox cleanup, and re-running setup.
  */
 @Composable
 fun SettingsContent(
@@ -73,6 +82,8 @@ fun SettingsContent(
     onClearKey: () -> Unit,
     onSetAllowed: (String, Boolean) -> Unit,
     onRunSetup: () -> Unit,
+    onSetAutoDeleteDays: (Int) -> Unit = {},
+    onClearReadChats: () -> Unit = {},
 ) {
     // App icons are cached app-wide, per package and at display size, by AppInfoProvider.
     val iconOf = icon
@@ -91,6 +102,7 @@ fun SettingsContent(
         ) {
             item(key = "key") { ApiKeyCard(state, onSaveKey, onClearKey) }
             item(key = "apps") { AppsCard(state.apps, iconOf, onSetAllowed) }
+            item(key = "cleanup") { CleanupCard(state, onSetAutoDeleteDays, onClearReadChats) }
             item(key = "setup") { SetupCard(onRunSetup, Modifier.navigationBarsPadding()) }
         }
     }
@@ -238,6 +250,82 @@ private fun AppRow(app: AppToggle, icon: ImageBitmap?, onSetAllowed: (String, Bo
         )
         Spacer(Modifier.width(8.dp))
         Switch(checked = app.allowed, onCheckedChange = null)
+    }
+}
+
+fun autoDeleteLabel(days: Int): String = if (days <= 0) "Off" else "$days days"
+
+/** Auto-delete period for read chats, plus a one-off "Clear read chats" behind a confirm dialog. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CleanupCard(
+    state: SettingsUiState,
+    onSetAutoDeleteDays: (Int) -> Unit,
+    onClearReadChats: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    var confirming by remember { mutableStateOf(false) }
+    SectionCard(
+        containerColor = colors.surfaceContainerHigh,
+        contentColor = colors.onSurface,
+        modifier = Modifier.fillMaxWidth(),
+        title = "Cleanup",
+    ) {
+        Text("Auto-delete read chats after", style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            Modifier.selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AUTO_DELETE_CHOICES.forEach { days ->
+                val selected = state.autoDeleteDays == days
+                FilterChip(
+                    selected = selected,
+                    onClick = { onSetAutoDeleteDays(days) },
+                    label = { Text(autoDeleteLabel(days)) },
+                    modifier = Modifier.semantics { role = Role.RadioButton },
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Chats with unread messages are never auto-deleted",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(14.dp))
+        OneInboxTonalButton(
+            onClick = { confirming = true },
+            enabled = state.readChats > 0,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Rounded.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Clear read chats (${state.readChats})", fontWeight = FontWeight.Bold)
+        }
+        state.cleanupMessage?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+        }
+    }
+    if (confirming) {
+        val count = state.readChats
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            icon = { Icon(Icons.Rounded.DeleteSweep, contentDescription = null) },
+            title = { Text(if (count == 1) "Delete 1 read chat?" else "Delete $count read chats?") },
+            text = { Text("Chats with unread messages are kept. This can't be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirming = false
+                        onClearReadChats()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = colors.error),
+                ) { Text("Delete", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } },
+        )
     }
 }
 

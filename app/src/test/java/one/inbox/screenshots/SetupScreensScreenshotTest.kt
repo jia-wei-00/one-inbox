@@ -13,8 +13,12 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -217,8 +221,50 @@ class SetupScreensScreenshotTest {
         var setup = 0
         compose.setContent { settings(SettingsUiState(apps = SIX_APPS), onBack = { back++ }, onRunSetup = { setup++ }) }
         compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithText("Run setup again").performScrollTo().performClick()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Run setup again"))
+        compose.onNodeWithText("Run setup again").performClick()
         assertEquals(listOf(1, 1), listOf(back, setup))
+    }
+
+    // --- Cleanup --------------------------------------------------------------------------------
+
+    @Test
+    fun settings_cleanup() {
+        compose.setContent { settings(SettingsUiState(hasKey = true, apps = SIX_APPS, autoDeleteDays = 30, readChats = 4)) }
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Run setup again"))
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_cleanup.png")
+    }
+
+    @Test
+    fun autoDeleteChoicesShowTheCurrentOneAndCallBackWithDays() {
+        val chosen = mutableListOf<Int>()
+        compose.setContent { settings(SettingsUiState(autoDeleteDays = 0), onSetAutoDeleteDays = { chosen += it }) }
+        compose.onNodeWithText("Off").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("30 days").assertIsNotSelected().performClick()
+        compose.onNodeWithText("90 days").performClick()
+        assertEquals(listOf(30, 90), chosen)
+    }
+
+    @Test
+    fun clearReadChatsAsksFirst() {
+        var cleared = 0
+        compose.setContent { settings(SettingsUiState(readChats = 2), onClearReadChats = { cleared++ }) }
+        compose.onNodeWithText("Clear read chats (2)").performScrollTo().performClick()
+        compose.onNodeWithText("Delete 2 read chats?").assertExists()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Delete 2 read chats?").assertDoesNotExist()
+        assertEquals(0, cleared)
+        compose.onNodeWithText("Clear read chats (2)").performClick()
+        compose.onNodeWithText("Delete").performClick()
+        assertEquals(1, cleared)
+    }
+
+    @Test
+    fun clearReadChatsIsDisabledWhenThereAreNone() {
+        compose.setContent { settings(SettingsUiState(readChats = 0, cleanupMessage = "Deleted 3 chats")) }
+        compose.onNodeWithText("Clear read chats (0)").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Deleted 3 chats").assertExists()
     }
 
     // --- Helpers ------------------------------------------------------------------------------
@@ -254,6 +300,8 @@ class SetupScreensScreenshotTest {
         onClearKey: () -> Unit = {},
         onSetAllowed: (String, Boolean) -> Unit = { _, _ -> },
         onRunSetup: () -> Unit = {},
+        onSetAutoDeleteDays: (Int) -> Unit = {},
+        onClearReadChats: () -> Unit = {},
     ) = OneInboxTheme(darkTheme = true) {
         SettingsContent(
             state = state,
@@ -263,6 +311,8 @@ class SetupScreensScreenshotTest {
             onClearKey = onClearKey,
             onSetAllowed = onSetAllowed,
             onRunSetup = onRunSetup,
+            onSetAutoDeleteDays = onSetAutoDeleteDays,
+            onClearReadChats = onClearReadChats,
         )
     }
 

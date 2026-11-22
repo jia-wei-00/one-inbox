@@ -72,5 +72,8 @@ fun InboxScreen(
             }
         },
         motionEnabled = rememberMotionEnabled(),
+        onDelete = viewModel::delete,
+        onUndoDelete = viewModel::undoDelete,
+        onUndoDismissed = viewModel::dismissUndo,
     )
 }
