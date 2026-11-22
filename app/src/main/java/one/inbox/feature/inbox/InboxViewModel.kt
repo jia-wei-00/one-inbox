@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,15 +52,12 @@ class InboxViewModel @Inject constructor(
     private val appInfo: AppInfoProvider,
     private val access: AccessChecker,
     private val settings: SettingsStore,
-    cleaner: InboxCleaner,
+    private val cleaner: InboxCleaner,
 ) : ViewModel() {
     private val selected = MutableStateFlow<String?>(null)
     private val healthTick = MutableStateFlow(0)
     private val deleted = MutableStateFlow<DeletedConversation?>(null)
 
-    init {
-        viewModelScope.launch { cleaner.autoClean() }
-    }
 
     private val rail = repo.apps().map { list ->
         list.map { RailApp(it.packageName, appInfo.label(it.packageName), it.unreadCount) }
@@ -99,6 +98,19 @@ class InboxViewModel @Inject constructor(
         viewModelScope.launch { settings.toggleSidebar() }
     }
 
+    /** Applies the auto-delete setting; called whenever the inbox comes on screen. */
+    fun autoClean() {
+        viewModelScope.launch {
+            try {
+                cleaner.autoClean()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("InboxViewModel", "auto-delete failed", e)
+            }
+        }
+    }
+
     /** Deletes a chat for good, offering Undo until [undoDelete] or [dismissUndo]. */
     fun delete(conversationKey: String) {
         viewModelScope.launch {
@@ -106,14 +118,13 @@ class InboxViewModel @Inject constructor(
         }
     }
 
-    fun undoDelete() {
-        val chat = deleted.value ?: return
-        deleted.value = null
-        viewModelScope.launch { repo.restore(chat) }
+    /** Restores [chat], but only while it is still the one offered (a newer delete replaces the offer). */
+    fun undoDelete(chat: DeletedConversation) {
+        if (deleted.compareAndSet(chat, null)) viewModelScope.launch { repo.restore(chat) }
     }
 
-    fun dismissUndo() {
-        deleted.value = null
+    fun dismissUndo(chat: DeletedConversation) {
+        deleted.compareAndSet(chat, null)
     }
 
     /** Re-run the capture health check (called on resume and every 15 minutes while visible). */

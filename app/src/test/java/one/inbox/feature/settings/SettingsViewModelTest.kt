@@ -114,16 +114,38 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun choosingAnAutoDeletePeriodAppliesItRightAway() = runTest {
+    fun aPeriodThatWouldDeleteChatsAsksFirst() = runTest {
         val (vm, store) = vm()
         val old = System.currentTimeMillis() - 40L * 24 * 60 * 60 * 1000
         repo.save(listOf(msg("a", "wa:old", old)))
         repo.markConversationRead("wa:old")
         assertEquals(0, vm.state.first { it.readChats == 1 }.autoDeleteDays)
+
         vm.setAutoDeleteDays(30)
-        vm.state.first { it.autoDeleteDays == 30 && it.readChats == 0 }
-        assertEquals(30, store.autoDeleteDays.first())
+        assertEquals(AutoDeleteConfirm(30, 1), vm.state.first { it.confirmAutoDelete != null }.confirmAutoDelete)
+        assertEquals(0, store.autoDeleteDays.first())
+        vm.cancelAutoDelete()
+        assertEquals(null, vm.state.first { it.confirmAutoDelete == null }.confirmAutoDelete)
+        assertEquals(1, repo.conversations(null).first().size)
+
+        vm.setAutoDeleteDays(30)
+        vm.state.first { it.confirmAutoDelete != null }
+        vm.confirmAutoDelete()
+        val done = vm.state.first { it.autoDeleteDays == 30 && it.readChats == 0 && it.cleanupMessage != null }
+        assertEquals("Deleted 1 chat", done.cleanupMessage)
         assertTrue(repo.conversations(null).first().isEmpty())
+    }
+
+    @Test
+    fun aPeriodThatDeletesNothingAppliesWithoutAsking() = runTest {
+        val (vm, store) = vm()
+        repo.save(listOf(msg("a", "wa:recent", System.currentTimeMillis())))
+        repo.markConversationRead("wa:recent")
+        vm.setAutoDeleteDays(7)
+        assertEquals(7, vm.state.first { it.autoDeleteDays == 7 }.autoDeleteDays)
+        assertEquals(null, vm.state.value.confirmAutoDelete)
+        assertEquals(7, store.autoDeleteDays.first())
+        assertEquals(1, repo.conversations(null).first().size)
     }
 
     @Test

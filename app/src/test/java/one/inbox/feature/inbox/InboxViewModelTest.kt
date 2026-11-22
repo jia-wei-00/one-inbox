@@ -138,7 +138,7 @@ class InboxViewModelTest {
         val deleted = vm.state.first { it.conversations.size == 1 && it.deleted != null }
         assertEquals("Alice", deleted.deleted!!.conversation.title)
         assertEquals(1, deleted.totalUnread)
-        vm.undoDelete()
+        vm.undoDelete(deleted.deleted!!)
         val restored = vm.state.first { it.conversations.size == 2 && it.deleted == null }
         assertEquals(3, restored.totalUnread)
     }
@@ -147,21 +147,38 @@ class InboxViewModelTest {
     fun dismissingTheUndoKeepsTheChatDeleted() = runTest {
         seed()
         vm.delete("wa:alice")
-        vm.state.first { it.deleted != null }
-        vm.dismissUndo()
+        val alice = vm.state.first { it.deleted != null }.deleted!!
+        vm.dismissUndo(alice)
         val state = vm.state.first { it.deleted == null }
         assertEquals(listOf("tg:bob"), state.conversations.map { it.key })
-        vm.undoDelete()
+        vm.undoDelete(alice)
         assertEquals(1, repo.conversations(null).first().size)
     }
 
     @Test
-    fun openingTheInboxAppliesAutoDelete() = runTest {
+    fun aStaleUndoDoesNotTouchTheNewerDelete() = runTest {
+        seed()
+        vm.delete("wa:alice")
+        val alice = vm.state.first { it.deleted?.conversation?.key == "wa:alice" }.deleted!!
+        vm.delete("tg:bob")
+        val bob = vm.state.first { it.deleted?.conversation?.key == "tg:bob" }.deleted!!
+        // Alice's snackbar was replaced: answering it late changes nothing.
+        vm.undoDelete(alice)
+        vm.dismissUndo(alice)
+        assertEquals(bob, vm.state.value.deleted)
+        assertTrue(repo.conversations(null).first().isEmpty())
+        vm.undoDelete(bob)
+        assertEquals(listOf("tg:bob"), vm.state.first { it.conversations.size == 1 }.conversations.map { it.key })
+    }
+
+    @Test
+    fun autoCleanAppliesTheAutoDeleteSetting() = runTest {
         val old = System.currentTimeMillis() - 40L * 24 * 60 * 60 * 1000
         repo.save(listOf(msg("o", "wa:old", "com.whatsapp", "Old", old), msg("n", "tg:new", "org.telegram.messenger", "New", old)))
         repo.markConversationRead("wa:old")
         settings.setAutoDeleteDays(30)
         val fresh = newVm()
+        fresh.autoClean()
         val state = fresh.state.first { it.conversations.size == 1 }
         assertEquals("New", state.conversations.single().title)
         assertNull(state.deleted)

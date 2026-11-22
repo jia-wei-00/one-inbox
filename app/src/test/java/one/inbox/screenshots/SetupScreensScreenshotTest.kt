@@ -35,6 +35,7 @@ import one.inbox.feature.onboarding.OnboardingContent
 import one.inbox.feature.onboarding.OnboardingStep
 import one.inbox.feature.onboarding.OnboardingSteps
 import one.inbox.feature.settings.AppToggle
+import one.inbox.feature.settings.AutoDeleteConfirm
 import one.inbox.feature.settings.MSG_KEY_SAVED
 import one.inbox.feature.settings.MSG_KEY_SAVE_FAILED
 import one.inbox.feature.settings.SettingsContent
@@ -261,6 +262,24 @@ class SetupScreensScreenshotTest {
     }
 
     @Test
+    fun pendingAutoDeleteAsksBeforeDeleting() {
+        var confirmed = 0
+        var cancelled = 0
+        compose.setContent {
+            settings(
+                SettingsUiState(confirmAutoDelete = AutoDeleteConfirm(days = 7, chats = 12)),
+                onConfirmAutoDelete = { confirmed++ },
+                onCancelAutoDelete = { cancelled++ },
+            )
+        }
+        compose.onNodeWithText("Delete 12 read chats?").assertExists()
+        compose.onNodeWithText("Auto-delete after 7 days", substring = true).assertExists()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Delete").performClick()
+        assertEquals(listOf(1, 1), listOf(confirmed, cancelled))
+    }
+
+    @Test
     fun clearReadChatsIsDisabledWhenThereAreNone() {
         compose.setContent { settings(SettingsUiState(readChats = 0, cleanupMessage = "Deleted 3 chats")) }
         compose.onNodeWithText("Clear read chats (0)").performScrollTo().assertIsNotEnabled()
@@ -302,6 +321,8 @@ class SetupScreensScreenshotTest {
         onRunSetup: () -> Unit = {},
         onSetAutoDeleteDays: (Int) -> Unit = {},
         onClearReadChats: () -> Unit = {},
+        onConfirmAutoDelete: () -> Unit = {},
+        onCancelAutoDelete: () -> Unit = {},
     ) = OneInboxTheme(darkTheme = true) {
         SettingsContent(
             state = state,
@@ -313,6 +334,8 @@ class SetupScreensScreenshotTest {
             onRunSetup = onRunSetup,
             onSetAutoDeleteDays = onSetAutoDeleteDays,
             onClearReadChats = onClearReadChats,
+            onConfirmAutoDelete = onConfirmAutoDelete,
+            onCancelAutoDelete = onCancelAutoDelete,
         )
     }
 

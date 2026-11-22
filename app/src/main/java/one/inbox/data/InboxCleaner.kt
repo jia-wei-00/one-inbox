@@ -20,4 +20,8 @@ class InboxCleaner @Inject constructor(
         if (days <= 0) return 0
         return inbox.deleteReadConversations(before = now - days * DAY_MS)
     }
+
+    /** How many chats choosing [days] would delete right now. */
+    suspend fun wouldDelete(days: Int, now: Long = System.currentTimeMillis()): Int =
+        if (days <= 0) 0 else inbox.countReadConversations(before = now - days * DAY_MS)
 }

@@ -101,6 +101,15 @@ abstract class InboxDao {
     @Query(
         """
         SELECT COUNT(*) FROM conversations c
+        WHERE c.lastMessageAt < :before
+          AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.conversationKey = c.`key` AND m.unread = 1)
+        """,
+    )
+    abstract suspend fun countReadConversations(before: Long): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM conversations c
         WHERE NOT EXISTS (SELECT 1 FROM messages m WHERE m.conversationKey = c.`key` AND m.unread = 1)
         """,
     )

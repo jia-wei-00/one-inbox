@@ -14,6 +14,9 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import one.inbox.data.DeletedConversation
 import one.inbox.data.db.ConversationEntity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
@@ -219,6 +222,28 @@ class InboxScreenshotTest {
     }
 
     @Test
+    fun aSwipedChatThatComesBackIsNotDeletedAgain() {
+        val deleted = mutableListOf<String>()
+        var state by mutableStateOf(baseState())
+        compose.setContent {
+            OneInboxTheme(darkTheme = true) {
+                Content(state, onDelete = { key ->
+                    deleted += key
+                    state = state.copy(conversations = state.conversations.filterNot { it.key == key })
+                })
+            }
+        }
+        compose.onNodeWithText("Mom").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Mom").assertDoesNotExist()
+        // Undo (or a new message) brings the same chat back.
+        state = baseState()
+        compose.waitForIdle()
+        compose.onNodeWithText("Mom").assertIsDisplayed()
+        assertEquals(listOf("wa:mom"), deleted)
+    }
+
+    @Test
     fun deleteIsOfferedAsAnAccessibilityAction() {
         val deleted = mutableListOf<String>()
         compose.setContent {
@@ -262,8 +287,8 @@ class InboxScreenshotTest {
         onToggleSidebar: () -> Unit = {},
         onCatchUp: () -> Unit = {},
         onDelete: (String) -> Unit = {},
-        onUndoDelete: () -> Unit = {},
-        onUndoDismissed: () -> Unit = {},
+        onUndoDelete: (DeletedConversation) -> Unit = {},
+        onUndoDismissed: (DeletedConversation) -> Unit = {},
     ) {
         InboxContent(
             state = state,

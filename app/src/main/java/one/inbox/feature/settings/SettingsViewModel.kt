@@ -34,7 +34,13 @@ data class SettingsUiState(
     /** Chats with nothing unread, i.e. what "Clear read chats" would delete. */
     val readChats: Int = 0,
     val cleanupMessage: String? = null,
+    /** A chosen auto-delete period that would delete chats right away, waiting for confirmation. */
+    val confirmAutoDelete: AutoDeleteConfirm? = null,
 )
+
+data class AutoDeleteConfirm(val days: Int, val chats: Int)
+
+private data class CleanupState(val days: Int, val readChats: Int, val message: String?, val confirm: AutoDeleteConfirm?)
 
 const val MSG_KEY_SAVED = "Key saved"
 const val MSG_KEY_SAVE_FAILED = "Couldn't save the key"
@@ -56,6 +62,7 @@ class SettingsViewModel @Inject constructor(
     private val hasKey = MutableStateFlow(false)
     private val keyMessage = MutableStateFlow<String?>(null)
     private val cleanupStatus = MutableStateFlow<String?>(null)
+    private val pendingAutoDelete = MutableStateFlow<AutoDeleteConfirm?>(null)
 
     // PackageManager lookups (isLaunchable, label) stay off the main thread.
     private val apps = combine(settings.allowedPackages, settings.seenPackages) { allowed, seen ->
@@ -65,12 +72,16 @@ class SettingsViewModel @Inject constructor(
             .sortedBy { it.label.lowercase() }
     }.flowOn(Dispatchers.Default)
 
-    private val cleanup = combine(settings.autoDeleteDays, inbox.readConversationCount(), cleanupStatus) { days, read, msg ->
-        Triple(days, read, msg)
-    }
+    private val cleanup = combine(
+        settings.autoDeleteDays,
+        inbox.readConversationCount(),
+        cleanupStatus,
+        pendingAutoDelete,
+        ::CleanupState,
+    )
 
-    val state: StateFlow<SettingsUiState> = combine(hasKey, keyMessage, apps, cleanup) { key, msg, apps, (days, read, cleaned) ->
-        SettingsUiState(key, msg, apps, days, read, cleaned)
+    val state: StateFlow<SettingsUiState> = combine(hasKey, keyMessage, apps, cleanup) { key, msg, apps, c ->
+        SettingsUiState(key, msg, apps, c.days, c.readChats, c.message, c.confirm)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     init {
@@ -114,12 +125,31 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settings.setAllowed(packageName, allowed) }
     }
 
-    /** Saves the auto-delete period and applies it at once, so the choice takes effect immediately. */
+    /**
+     * Chooses the auto-delete period. It applies at once; if that would delete chats right away,
+     * it waits for [confirmAutoDelete] instead (a mis-tap on "7 days" shouldn't wipe a month of chats).
+     */
     fun setAutoDeleteDays(days: Int) {
         viewModelScope.launch {
-            settings.setAutoDeleteDays(days)
-            cleaner.autoClean()
+            val chats = cleaner.wouldDelete(days)
+            if (chats > 0) pendingAutoDelete.value = AutoDeleteConfirm(days, chats) else applyAutoDelete(days)
         }
+    }
+
+    fun confirmAutoDelete() {
+        val pending = pendingAutoDelete.value ?: return
+        pendingAutoDelete.value = null
+        viewModelScope.launch { applyAutoDelete(pending.days) }
+    }
+
+    fun cancelAutoDelete() {
+        pendingAutoDelete.value = null
+    }
+
+    private suspend fun applyAutoDelete(days: Int) {
+        settings.setAutoDeleteDays(days)
+        val deleted = cleaner.autoClean()
+        if (deleted > 0) cleanupStatus.value = cleanupMessage(deleted)
     }
 
     /** Deletes every chat with nothing unread (the UI confirms first). */

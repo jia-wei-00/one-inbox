@@ -19,7 +19,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.foundation.clickable
@@ -87,6 +87,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import one.inbox.capture.CaptureHealth
+import one.inbox.data.DeletedConversation
 import one.inbox.data.db.ConversationRow
 import one.inbox.ui.components.Avatar
 import one.inbox.ui.components.CountPill
@@ -128,8 +129,8 @@ fun InboxContent(
     onFixHealth: () -> Unit,
     motionEnabled: Boolean = true,
     onDelete: (String) -> Unit = {},
-    onUndoDelete: () -> Unit = {},
-    onUndoDismissed: () -> Unit = {},
+    onUndoDelete: (DeletedConversation) -> Unit = {},
+    onUndoDismissed: (DeletedConversation) -> Unit = {},
 ) {
     // App icons are cached app-wide, per package and at display size, by AppInfoProvider.
     val iconOf = icon
@@ -158,12 +159,19 @@ fun InboxContent(
     val deleted = state.deleted
     LaunchedEffect(deleted) {
         if (deleted == null) return@LaunchedEffect
-        val result = snackbars.showSnackbar(
-            message = "Deleted ${deleted.conversation.title}",
-            actionLabel = "Undo",
-            duration = SnackbarDuration.Short,
-        )
-        if (result == SnackbarResult.ActionPerformed) onUndoDelete() else onUndoDismissed()
+        var answered = false
+        try {
+            val result = snackbars.showSnackbar(
+                message = "Deleted ${deleted.conversation.title}",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short,
+            )
+            answered = true
+            if (result == SnackbarResult.ActionPerformed) onUndoDelete(deleted) else onUndoDismissed(deleted)
+        } finally {
+            // Leaving the inbox ends the offer, so it doesn't pop up again later.
+            if (!answered) onUndoDismissed(deleted)
+        }
     }
 
     Scaffold(
@@ -394,7 +402,10 @@ private fun InboxList(
 /** Swiping a row either way deletes the chat; the red background shows behind the moving row. */
 @Composable
 private fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
-    val swipe = rememberSwipeToDismissBoxState()
+    // Deliberately not rememberSwipeToDismissBoxState (saveable): the list keeps a removed row's saved
+    // state under its key, so a chat brought back by Undo or a new message would return already
+    // dismissed and delete itself again.
+    val swipe = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, positionalThreshold = { it * 0.5f }) }
     SwipeToDismissBox(
         state = swipe,
         backgroundContent = {

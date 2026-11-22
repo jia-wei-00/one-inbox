@@ -66,6 +66,9 @@ class InboxRepository @Inject constructor(private val dao: InboxDao) {
     suspend fun deleteReadConversations(before: Long = Long.MAX_VALUE): Int =
         dao.deleteReadConversations(before, System.currentTimeMillis())
 
+    /** How many conversations [deleteReadConversations] would delete for [before]. */
+    suspend fun countReadConversations(before: Long): Int = dao.countReadConversations(before)
+
     /** How many conversations have nothing unread. */
     fun readConversationCount(): Flow<Int> = dao.readConversationCount()
 

@@ -25,5 +25,7 @@ fun SettingsScreen(
         onRunSetup = onRunSetupAgain,
         onSetAutoDeleteDays = viewModel::setAutoDeleteDays,
         onClearReadChats = viewModel::clearReadChats,
+        onConfirmAutoDelete = viewModel::confirmAutoDelete,
+        onCancelAutoDelete = viewModel::cancelAutoDelete,
     )
 }

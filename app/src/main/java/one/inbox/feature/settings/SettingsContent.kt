@@ -84,6 +84,8 @@ fun SettingsContent(
     onRunSetup: () -> Unit,
     onSetAutoDeleteDays: (Int) -> Unit = {},
     onClearReadChats: () -> Unit = {},
+    onConfirmAutoDelete: () -> Unit = {},
+    onCancelAutoDelete: () -> Unit = {},
 ) {
     // App icons are cached app-wide, per package and at display size, by AppInfoProvider.
     val iconOf = icon
@@ -102,7 +104,9 @@ fun SettingsContent(
         ) {
             item(key = "key") { ApiKeyCard(state, onSaveKey, onClearKey) }
             item(key = "apps") { AppsCard(state.apps, iconOf, onSetAllowed) }
-            item(key = "cleanup") { CleanupCard(state, onSetAutoDeleteDays, onClearReadChats) }
+            item(key = "cleanup") {
+                CleanupCard(state, onSetAutoDeleteDays, onClearReadChats, onConfirmAutoDelete, onCancelAutoDelete)
+            }
             item(key = "setup") { SetupCard(onRunSetup, Modifier.navigationBarsPadding()) }
         }
     }
@@ -262,6 +266,8 @@ private fun CleanupCard(
     state: SettingsUiState,
     onSetAutoDeleteDays: (Int) -> Unit,
     onClearReadChats: () -> Unit,
+    onConfirmAutoDelete: () -> Unit,
+    onCancelAutoDelete: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     var confirming by remember { mutableStateOf(false) }
@@ -309,24 +315,46 @@ private fun CleanupCard(
         }
     }
     if (confirming) {
-        val count = state.readChats
-        AlertDialog(
-            onDismissRequest = { confirming = false },
-            icon = { Icon(Icons.Rounded.DeleteSweep, contentDescription = null) },
-            title = { Text(if (count == 1) "Delete 1 read chat?" else "Delete $count read chats?") },
-            text = { Text("Chats with unread messages are kept. This can't be undone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirming = false
-                        onClearReadChats()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = colors.error),
-                ) { Text("Delete", fontWeight = FontWeight.Bold) }
+        DeleteChatsDialog(
+            title = chatCountQuestion(state.readChats),
+            text = "Chats with unread messages are kept. This can't be undone.",
+            onConfirm = {
+                confirming = false
+                onClearReadChats()
             },
-            dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } },
+            onDismiss = { confirming = false },
         )
     }
+    state.confirmAutoDelete?.let { pending ->
+        DeleteChatsDialog(
+            title = chatCountQuestion(pending.chats),
+            text = "Auto-delete after ${pending.days} days removes ${chatCount(pending.chats)} older than that " +
+                "right away. Chats with unread messages are kept. This can't be undone.",
+            onConfirm = onConfirmAutoDelete,
+            onDismiss = onCancelAutoDelete,
+        )
+    }
+}
+
+private fun chatCount(n: Int) = if (n == 1) "1 read chat" else "$n read chats"
+
+private fun chatCountQuestion(n: Int) = "Delete ${chatCount(n)}?"
+
+@Composable
+private fun DeleteChatsDialog(title: String, text: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Rounded.DeleteSweep, contentDescription = null) },
+        title = { Text(title) },
+        text = { Text(text) },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) { Text("Delete", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
